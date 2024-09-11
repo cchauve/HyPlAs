@@ -99,15 +99,16 @@ usage: raven [options ...] <sequences> [<sequences> ...]
 
 
 def raven_main(args):
+
     with open (args.output, 'w') as hand:
         cmd = [
             "raven",
-            args.reads,
             "--threads",
             str(args.threads),
             "-F",
             args.graphical_fragment_assembly
-        ]
+        ] + args.reads
+        #print(cmd)
         return subprocess.run(cmd,stdout=hand)
 
 def flye_main(args):
@@ -124,12 +125,11 @@ def flye_main(args):
     cmd = [
         "flye",
         f"--{args.read_type}",
-        args.reads,
         "--out-dir",
         tempdir,
         "--threads",
         str(args.threads),
-    ]
+    ] + args.reads
     result = subprocess.run(cmd)
     if result.return_code != 0:
         #print(f"Flye on {args.reads} failed Program Output:\n{result.stdout}\nProgram Error:{result.stderr}", file=sys.stderr)
@@ -146,7 +146,7 @@ def main():
     sbp = parser.add_subparsers(required=True)
     
     raven_parser = sbp.add_parser('raven')
-    raven_parser.add_argument("reads")
+    raven_parser.add_argument("reads", nargs="*")
 
     raven_parser.add_argument("-F", "--graphical-fragment-assembly", help="prints the assembly graph in GFA format")
     raven_parser.add_argument("-O", "--output", help="Output Fasta")
@@ -159,7 +159,8 @@ def main():
     flye_parser.add_argument("-F", "--graphical-fragment-assembly", help="prints the assembly graph in GFA format")
     flye_parser.add_argument("-O", "--output", help="Output Fasta")
     args = parser.parse_args()
-    
+    if not isinstance(args.reads, list):
+        args.reads = [args.reads]
     args.prog(args);
 
 

@@ -19,7 +19,7 @@ firstN = -1 if "firstN" not in config else config["firstN"]
 #config['tools'] = ['skesa', 'unicycler-sr']
 config['sra'] = ['unicycler']
 config['lra'] = ['raven']
-config['pcc'] = ['plasgraph2', 'platon']
+config['pcc'] = ['platon']
 
 
 def generate_fasta(fasta):
@@ -117,8 +117,11 @@ plasmid_classifier="plasgraph2"
 rule all:
     input:
         expand(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/lra-{{lra}}/final.circular.fasta", sample=config["samples"], sra=config["sra"], lra=config["lra"], pcc=config["pcc"]),
-        expand(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/lra-{{lra}}/final_gc.circular.fasta", sample=config["samples"], sra=config["sra"], lra=config["lra"], pcc=config["pcc"]),
+        #expand(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/lra-{{lra}}/final_gc.circular.fasta", sample=config["samples"], sra=config["sra"], lra=config["lra"], pcc=config["pcc"]),
 
+rule all_assembly_qc:
+    input:
+        expand(f"{outpath}/{{sample}}/qc/assembly/magpie-raven/assembly.circular.fasta", sample=config["samples"]),
 
 rule all_selection_qc:
     input:
@@ -131,7 +134,7 @@ rule all_plassembler:
 rule all_stats:
     input:
         expand(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/selection-qc/plasmid_selected{{pu}}.coverage.tsv",sample=config["samples"], sra=config["sra"], lra=config["lra"], pcc=config["pcc"], pu =["","_pu"]),
-        expand(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/selection-qc/plasmid_selected{{pu}}.coverage.tsv",sample=config["samples"], sra=config["sra"], lra=config["lra"], pcc=["ppunion", "plasgraph2_strict"],  pu =["","_pu"]),
+        expand(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/selection-qc/plasmid_selected{{pu}}.coverage.tsv",sample=config["samples"], sra=config["sra"], lra=config["lra"], pcc=["plat_minus_plas"],  pu =["","_pu"]),
         
         expand(f"{outpath}/{{sample}}/qc/toplasmids.coverage.tsv",sample=config["samples"]),
 #        expand(f"{outpath}/{{sample}}/plassembler-qc/toplasmids.coverage.tsv",sample=config["samples"]),
@@ -142,6 +145,9 @@ rule find_circular_plasmids:
     output:
         fasta=f"{outpath}/{{sample}}/{{gfa}}.circular.fasta",
         tsv=f"{outpath}/{{sample}}/{{gfa}}.summary.tsv",
+    params:
+        save_large_cycles=False,
+        min_ctg_len=1000,
     run:
         import gfapy
         import networkx as nx
@@ -155,41 +161,51 @@ rule find_circular_plasmids:
 
         edge_set = {(x.from_name, x.to_name)for x in g.edges}
         G = nx.Graph()
-
-        with open(output.fasta, 'w') as fhand, open(output.tsv, 'w') as thand:
-            for a,b in edge_set:
-                if a==b:
-                    print(f">{a}\n{g.segment(a).sequence}",file=fhand)
-                    print("\t".join([
-                        a,
-                        str(len(g.segment(a).sequence)),
-                        "single",
-                        ]), file=thand)
-                else:
-                    G.add_edge(a,b)
-            while True:
-                a = sorted(list(nx.simple_cycles(G)), key = lambda s: len(s))
-                new_contig = []
-                new_contig_name = []
-                try:
-                    if len(a) > 0:
-                        for c in a[-1]:
-                            new_contig.append(g.segment(c).sequence)
-                            new_contig_name.append(c)               #TODO fix stranding
-                            G.remove_node(c)
+        if params.save_large_cycles:
+            with open(output.fasta, 'w') as fhand, open(output.tsv, 'w') as thand:
+                for a,b in edge_set:
+                    if a==b:
+                        print(f">{a}\n{g.segment(a).sequence}",file=fhand)
+                        print("\t".join([
+                            a,
+                            str(len(g.segment(a).sequence)),
+                            "single",
+                            ]), file=thand)
                     else:
-                        break
+                        G.add_edge(a,b)
+                while True:
+                    a = sorted(list(nx.simple_cycles(G)), key = lambda s: len(s))
+                    new_contig = []
+                    new_contig_name = []
+                    try:
+                        if len(a) > 0:
+                            for c in a[-1]:
+                                new_contig.append(g.segment(c).sequence)
+                                new_contig_name.append(c)               #TODO fix stranding
+                                G.remove_node(c)
+                        else:
+                            break
 
-                    ctg_name = "-".join(new_contig_name)
-                    ctg_seq = ''.join(new_contig)
-                    print(f">{ctg_name}\n{ctg_seq}",file=fhand)
-                    print("\t".join([
-                        ctg_name,
-                        str(len(ctg_seq)),
-                        "joined",
-                        ]), file=thand)
-                except:
-                    break
+                        ctg_name = "-".join(new_contig_name)
+                        ctg_seq = ''.join(new_contig)
+                        print(f">{ctg_name}\n{ctg_seq}",file=fhand)
+                        print("\t".join([
+                            ctg_name,
+                            str(len(ctg_seq)),
+                            "joined",
+                            ]), file=thand)
+                    except:
+                        break
+        else:
+            with open(output.fasta, 'w') as fhand, open(output.tsv, 'w') as thand:
+                for a,b in edge_set:
+                    if a==b and len(g.segment(a).sequence) > params.min_ctg_len:
+                        print(f">{a}\n{g.segment(a).sequence}",file=fhand)
+                        print("\t".join([
+                            a,
+                            str(len(g.segment(a).sequence)),
+                            "single",
+                            ]), file=thand)
 
             
 
@@ -318,6 +334,33 @@ rule skesa:
         " --memory {params.memory}"
         " > {output.fasta}"
 
+rule extract_missing_long_reads:
+    input:
+        lr = f"{outpath}/{{sample}}/qc/trim.lr.fastq.gz",
+        paf = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.saved.paf",
+    output:
+        lr = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.saved.fastq.gz",
+    shell:
+        "./src/select_missing_reads"
+        " {input.paf}"
+        " {input.lr}"
+        " {output.lr}"
+
+rule find_missing_long_reads:
+    input:
+        lr = f"{outpath}/{{sample}}/qc/trim.lr.fastq.gz",
+        lr_plasmid = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.fastq.gz",
+    output:
+        paf = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.saved.paf",
+    threads:
+        64
+    shell:
+        "minimap2"
+        " <( ../bio/build/bin/innotin {input.lr} {input.lr_plasmid})"
+        " {input.lr_plasmid}"
+        " -o {output.paf}"
+        " -t {threads}"
+
 rule unicycler_sr:
     input:
         sr1 = f"{outpath}/{{sample}}/qc/{{sample}}.sr1.fastq.gz",
@@ -364,6 +407,32 @@ rule fastp:
         " {params.par}"
 
 
+rule platon_plus_plasgraph2_negative:
+    input:
+        plat = f"{outpath}/{{sample}}/sra-{{tool}}/pcc-platon/classify/result_p.tsv",
+        plas = f"{outpath}/{{sample}}/sra-{{tool}}/pcc-plasgraph2/classify/result.csv",
+    output:
+        tsv =  f"{outpath}/{{sample}}/sra-{{tool}}/pcc-plat_minus_plas/classify/result_p.tsv",
+    threads:
+        2
+    params:
+        max_plas_score = 0.01,
+        min_chro_score = 0.99,
+    run:
+        import pandas as pd
+        A = {str(x) for x in pd.read_csv(input.plat, sep="\t").ID}
+        df = pd.read_csv(input.plas, sep=",").set_index('contig')
+
+        df = df.loc[df.chrom_score >= params.min_chro_score]
+        df = df.loc[df.plasmid_score < params.max_plas_score]
+        B = {str(x) for x in df.index}
+        with open(output.tsv, 'w') as hand:
+            print("ID\tPREDICTION",file=hand)
+            for ctg in A:
+                print(f"{ctg}\tplasmid",file=hand)
+            for ctg in B - A:
+                print(f"{ctg}\tchromosome",file=hand)
+        
 rule platon_plus_plasgraph2_strict:
     input:
         plat = f"{outpath}/{{sample}}/sra-{{tool}}/pcc-platon/classify/result.tsv",
@@ -375,16 +444,29 @@ rule platon_plus_plasgraph2_strict:
         A = {str(x) for x in pd.read_csv(input.plat, sep="\t").ID}
         B = {str(x) for x in pd.read_csv(input.plas, sep="\t").ID}
         with open(output.tsv, 'w') as hand:
-            print("ID",file=hand)
+            print("ID\tPREDICTION",file=hand)
             for ctg in A | B:
-                print(ctg,file=hand)
+                print(f"{ctg}\tplasmid",file=hand)
         
+rule process_plasgraph:
+    input:
+        csv = f"{outpath}/{{sample}}/sra-{{tool}}/pcc-plasgraph2/classify/result.csv",
+    output:
+        tsv = f"{outpath}/{{sample}}/sra-{{tool}}/pcc-plasgraph2/classify/result_p.tsv",
+    run:
+        import pandas as pd
+        df = pd.read_csv(input.csv)
+        with open(output.tsv, 'w') as hand:
+            print("ID\tPREDICTION", file=hand)
+            for i,d in df.iterrows():
+                print(f"{d.contig}\t{d.label}", file=hand)
+
 rule plasgraph2_strict:
     input:
         gfa = f"{outpath}/{{sample}}/sra-{{tool}}/assemble/assembly.gfa", 
     output:
         csv = temp(f"{outpath}/{{sample}}/sra-{{tool}}/pcc-plasgraph2_strict/classify/result.csv"),
-        tsv = f"{outpath}/{{sample}}/sra-{{tool}}/pcc-plasgraph2_strict/classify/result.tsv",
+        tsv = temp(f"{outpath}/{{sample}}/sra-{{tool}}/pcc-plasgraph2_strict/classify/result.tsv"),
     shell:
         "CUDA_VISIBLE_DEVICES=''"
         " micromamba run -n plasgraph-env"
@@ -425,6 +507,18 @@ rule generate_plasgraph2_plasmid_contigs:
                 if n in df:
                     print(f">{n} {h}\n{c}", file=hand)
 
+rule process_platon:
+    input:
+        tsv = f"{outpath}/{{sample}}/sra-{{tool}}/pcc-platon/classify/result.tsv",
+    output:
+        tsv = f"{outpath}/{{sample}}/sra-{{tool}}/pcc-platon/classify/result_p.tsv",
+    run:
+        import pandas as pd
+        df = pd.read_csv(input.tsv, sep="\t")
+        with open(output.tsv, 'w') as hand:
+            print("ID\tPREDICTION", file=hand)
+            for i,d in df.iterrows():
+                print(f"{d.ID}\tplasmid", file=hand)
 rule platon:
     input:
         fasta = f"{outpath}/{{sample}}/sra-{{tool}}/assemble/assembly.fasta", 
@@ -506,10 +600,33 @@ rule MG_lr_reads_Trimmed:
         " -x lr -c "
         " > {output.gaf}"
 
+rule assemble_selected_reads_with_magpie_GT:
+    input:
+        lr_plasmid = f"{outpath}/{{sample}}/qc/toplasmids.fq.gz",
+    output:
+        fasta = f"{outpath}/{{sample}}/qc/assembly/magpie-{{lra}}/assembly.fasta",
+        gfa = f"{outpath}/{{sample}}/qc/assembly/magpie-{{lra}}/assembly.gfa"
+    threads:
+        64
+    params:
+        lr_assembler= lambda w: w.lra,
+    resources:
+        runtime=6*60-1,
+        mem_mb="256G",
+    shell:
+        "python3"
+        " src/magpie.py"
+        " --threads {threads}"
+        " {params.lr_assembler}"
+        " {input.lr_plasmid}"
+        " -F {output.gfa}"
+        " -O {output.fasta}"
 
 rule assemble_selected_reads_with_magpie:
     input:
-        lr_plasmid = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.fastq.gz",
+        lr_plasmid = [f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.fastq.gz",
+        f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.saved.fastq.gz",
+        f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/unknown.fastq.gz"],
     output:
         fasta = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/lra-{{lra}}/lr-assembly.fasta",
         gfa = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/lra-{{lra}}/lr-assembly.gfa",
@@ -680,7 +797,7 @@ rule split_reads_plasmid_chr:
     input:
         gaf = f"{outpath}/{{sample}}/sra-{{sra}}/minigraph/lr2sra.gaf",
         lr = f"{outpath}/{{sample}}/qc/trim.lr.fastq.gz",
-        tsv = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/classify/result.tsv",
+        tsv = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/classify/result_p.tsv",
     output:
         lr_plasmid = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.fastq.gz",
         lr_unknown = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/unknown.fastq.gz",
@@ -690,7 +807,13 @@ rule split_reads_plasmid_chr:
     threads:
         4
     shell:
-        "./src/split_plasmid_reads {input.gaf} {input.lr} {input.tsv} {output.lr_plasmid} skip {output.lr_unknown}"
+        "./src/split_plasmid_reads"
+        " {input.gaf}"
+        " {input.lr}"
+        " {input.tsv}"
+        " {output.lr_plasmid}"
+        " skip"
+        " {output.lr_unknown}"
 
 
 rule minigraph2GT:
@@ -781,15 +904,19 @@ rule minimap2GT_plus_unknown:
         filter_bin = "src/filter_plasmid_sam.py", 
         ref=f"{refdir}/{{sample}}.fasta",
         lr_plasmid = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.fastq.gz",
+        lr_plasmid2 = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.saved.fastq.gz",
         lr_unknown = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/unknown.fastq.gz",
     output:
         sam=temp(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/selection-qc/plasmid_selected_pu.sam"),
         samf=temp(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/selection-qc/plasmid_selected_pu_filtered.sam"),
         bam=f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/selection-qc/plasmid_selected_pu.bam",
+    threads:
+        32
     shell:
         "minimap2"
         " {input.ref}"
         " {input.lr_plasmid}"
+        " {input.lr_plasmid2}"
         " {input.lr_unknown}"
         " -t {threads}"
         " -x map-ont"
@@ -801,14 +928,18 @@ rule minimap2GT:
         filter_bin = "src/filter_plasmid_sam.py", 
         ref=f"{refdir}/{{sample}}.fasta",
         lr_plasmid = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.fastq.gz",
+        lr_plasmid2 = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.saved.fastq.gz",
     output:
         sam=temp(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/selection-qc/plasmid_selected.sam"),
         samf=temp(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/selection-qc/plasmid_selected_filtered.sam"),
         bam=f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/selection-qc/plasmid_selected.bam",
+    threads:
+        32
     shell:
         "minimap2"
         " {input.ref}"
         " {input.lr_plasmid}"
+        " {input.lr_plasmid2}"
         " -t {threads}"
         " -x map-ont"
         " -a -o {output.sam}"
@@ -826,3 +957,18 @@ rule CircularizeReferencePlasmids:
                 print(f"S\t{name}\t{seq}", file=hand)
                 print(f"L\t{name}\t+\t{name}\t+\t0M", file=hand)
                 print(f"L\t{name}\t-\t{name}\t-\t0M", file=hand)
+
+
+
+rule bam2fq:
+    input:
+        f"{{sample}}.bam",
+    output:
+        f"{{sample}}.fq.gz",
+    shell:
+        "samtools fastq"
+        " -1 /dev/null -2 /dev/null -s /dev/null"
+        " -n {input}"
+        " | pigz > {output}"
+
+

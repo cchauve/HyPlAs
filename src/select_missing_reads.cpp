@@ -86,6 +86,10 @@ struct mmap_view {
         }
         return true;
     }
+
+    char operator [] (size_t idx){
+        return (*mmap)[idx + s];
+    }
     bool operator==(const mmap_view &other) const {
         if (other.e - other.s != e - s) {
             return false;
@@ -238,11 +242,11 @@ set<string> parse_plasmid_tsv_old(const string &path) {
     return plasmid_contigs;
 }
 
-struct GafEntry {
+struct PafEntry {
     bool isterm;
     gview id;
     vector<gview> contigs;
-    GafEntry(mmap_view &gaf_view) : isterm{false}, id{(unsigned)-1,(unsigned)-1} {
+    PafEntry(mmap_view &gaf_view) : isterm{false}, id{(unsigned)-1,(unsigned)-1} {
         bool first = true;
         if (gaf_view.e >= gaf_view.cap) {
             isterm = true;
@@ -261,8 +265,10 @@ struct GafEntry {
             gaf_view.skip_next_n('\t', 5);
             gaf_view.extend_until('\t');
             mmap_view alig_view = gaf_view.focus();
-            alig_view.skip_next("<>");
 
+            if (alig_view[0] == '<' || alig_view[0] == '>'){
+                alig_view.skip_next("<>");
+            }
             while (alig_view.e < alig_view.cap) {
                 alig_view.extend_until("<>");
                 contigs.push_back(alig_view);
@@ -285,17 +291,9 @@ int process_gaf(int argc, char **argv) {
     }
 
     gzFile fastq_fp = gzopen(argv[2], "r");
-//    gzFile plasmid_out = gzopen(argv[4], "w");
 
-    FILE *plasmid_out = popen((string{"gzip - > "} + string{argv[4]}).c_str(), "w");
-    FILE *unknown_out = popen((string{"gzip - > "} + string{argv[6]}).c_str(), "w");
+    FILE *plasmid_out = popen((string{"gzip - > "} + string{argv[3]}).c_str(), "w");
 
-
-    FILE *chrmsm_out = NULL;
-    if (PRINT_CHROSOMAL){
-        chrmsm_out = popen((string{"gzip - > "} + string{argv[5]}).c_str(), "w");
-    }
-    auto plasmid_contigs = parse_plasmid_tsv(argv[3]);
     kseq_t *seq = kseq_init(fastq_fp);
 
     mmap_view gaf_view{&gaf_mmap};
@@ -304,70 +302,39 @@ int process_gaf(int argc, char **argv) {
 
     char *buffer = new char[MAX_READ_SIZE];
 
-    int l;
-    int buffer_length = 0;
-
-
     //    l = kseq_read(seq);
 
     vector<string> current_contigs;
+    unordered_map<string, int> reads2use;
 
-    for (GafEntry g{gaf_view}; !g.isterm; g = GafEntry{gaf_view}) {
-        l = kseq_read(seq);
-
+    for (PafEntry g{gaf_view}; !g.isterm; g = PafEntry{gaf_view}) {
         mmap_view gid {&gaf_mmap, g.id};
-        while (l >= 0) {
 
-            if (gid != seq->name) {
-                buffer_length = fprintf(unknown_out, "@%s %s\n%s\n+\n%s\n", seq->name.s,
-                                    seq->comment.s, seq->seq.s, seq->qual.s);
-
-                l = kseq_read(seq);
-            } else {
-                break;
-            }
-        }
-
-        bool from_chromosome = true;
         for (const gview v : g.contigs) {
             mmap_view vv{&gaf_mmap, v};
-
-            if (plasmid_contigs.contains((string)vv)) {
-
-                if(plasmid_contigs[(string)vv] == ContigType::Chromosome){
-                    from_chromosome = true;
-
-                    break;
-                }
-                else if (plasmid_contigs[(string)vv] == ContigType::Plasmid){
-                    buffer_length = fprintf(plasmid_out, "@%s %s\n%s\n+\n%s\n", seq->name.s,
-                                        seq->comment.s, seq->seq.s, seq->qual.s);
-
-
-                    from_chromosome = false;
-                    break;
-                }
-            }
-        }
-
-        if(PRINT_CHROSOMAL && from_chromosome){
-            buffer_length = fprintf(chrmsm_out, "@%s %s\n%s\n+\n%s\n", seq->name.s,
-                                seq->comment.s, seq->seq.s, seq->qual.s);
+            reads2use[(string)vv] = 1;
 
 
         }
-
     }
 
+
+    while (kseq_read(seq) >= 0){
+
+        string name{seq->name.s};
+        auto it = reads2use.find(name);
+        if(it != reads2use.end() && it->second > 0){
+            fprintf(plasmid_out, "@%s %s\n%s\n+\n%s\n", seq->name.s,
+                                seq->comment.s, seq->seq.s, seq->qual.s);
+            it->second--;
+        }
+    }
     kseq_destroy(seq);
     gzclose(fastq_fp);
 
 
     pclose(plasmid_out);
-    pclose(unknown_out);
-    if (PRINT_CHROSOMAL){
-        pclose(chrmsm_out);
-    }
+
 
     delete[] buffer;
     return 0;
