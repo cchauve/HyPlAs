@@ -156,7 +156,7 @@ def run_long_read_selection(args, prediction_path, graph_alignment_path):
         exit(-1)
     return plasmid_output, unknown_output
 
-def process_platon_output(args, platon_path, max_chr_rds=-1000, min_plasmid_rds=10):
+def process_platon_output(args, platon_path, max_chr_rds=-100000, min_plasmid_rds=10):
     df = pd.read_csv(f"{platon_path}/result.tsv", sep="\t")
     outpath=f"{platon_path}/result_p.tsv"
     with open(outpath, 'w') as hand:
@@ -235,8 +235,9 @@ def extract_missing_long_reads(args, plasmid_alignment, graph_alignment_path, pr
             extracted_lr_fastq,
             prediction_tsv_path
     ]
-    os.unlink(tfw.name)
+
     ret = subprocess.run(smr_cmd)
+    os.unlink(tfw.name)
 
     if ret.returncode != 0:
         logger.error(f"Long read extraction failed!")
