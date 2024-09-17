@@ -246,25 +246,25 @@ struct PafEntry {
     bool isterm;
     gview id;
     vector<gview> contigs;
-    PafEntry(mmap_view &gaf_view) : isterm{false}, id{(unsigned)-1,(unsigned)-1} {
+    PafEntry(mmap_view &paf_view) : isterm{false}, id{(unsigned)-1,(unsigned)-1} {
         bool first = true;
-        if (gaf_view.e >= gaf_view.cap) {
+        if (paf_view.e >= paf_view.cap) {
             isterm = true;
             return;
         }
         do {
-            gaf_view.extend_until('\t');
-            if (gaf_view != id) {
+            paf_view.extend_until('\t');
+            if (paf_view != id) {
                 if (!first) {
-                    gaf_view.e = gaf_view.s;  // rollback
+                    paf_view.e = paf_view.s;  // rollback
                     break;
                 }
-                id = gaf_view;
+                id = paf_view;
             }
             first = false;
-            gaf_view.skip_next_n('\t', 5);
-            gaf_view.extend_until('\t');
-            mmap_view alig_view = gaf_view.focus();
+            paf_view.skip_next_n('\t', 5);
+            paf_view.extend_until('\t');
+            mmap_view alig_view = paf_view.focus();
 
             if (alig_view[0] == '<' || alig_view[0] == '>'){
                 alig_view.skip_next("<>");
@@ -275,14 +275,21 @@ struct PafEntry {
                 alig_view.skip_next("<>");
             }
 
-            gaf_view.skip_next('\n');
-        } while (gaf_view.e < gaf_view.cap);
+            paf_view.skip_next('\n');
+        } while (paf_view.e < paf_view.cap);
     }
 };
 int process_gaf(int argc, char **argv) {
     std::error_code error;
 
-    mio::mmap_source gaf_mmap = mio::make_mmap_source(argv[1], error);
+    mio::mmap_source paf_mmap = mio::make_mmap_source(argv[1], error);
+    if (error) {
+        const auto &errmsg = error.message();
+        std::fprintf(stderr, "error mapping file: %s, exiting...\n",
+                     errmsg.c_str());
+        return error.value();
+    }
+    mio::mmap_source gaf_mmap = mio::make_mmap_source(argv[2], error);
     if (error) {
         const auto &errmsg = error.message();
         std::fprintf(stderr, "error mapping file: %s, exiting...\n",
@@ -290,12 +297,18 @@ int process_gaf(int argc, char **argv) {
         return error.value();
     }
 
-    gzFile fastq_fp = gzopen(argv[2], "r");
 
-    FILE *plasmid_out = popen((string{"gzip - > "} + string{argv[3]}).c_str(), "w");
+    gzFile fastq_fp = gzopen(argv[3], "r");
+
+    FILE *plasmid_out = popen((string{"gzip - > "} + string{argv[4]}).c_str(), "w");
+
+    auto blacklist_contigs = parse_plasmid_tsv(argv[5]);
+    
 
     kseq_t *seq = kseq_init(fastq_fp);
 
+
+    mmap_view paf_view{&paf_mmap};
     mmap_view gaf_view{&gaf_mmap};
 
     string prev_id;
@@ -307,14 +320,27 @@ int process_gaf(int argc, char **argv) {
     vector<string> current_contigs;
     unordered_map<string, int> reads2use;
 
+    for (PafEntry g{paf_view}; !g.isterm; g = PafEntry{paf_view}) {
+        mmap_view gid {&paf_mmap, g.id};
+
+        for (const gview v : g.contigs) {
+            mmap_view vv{&paf_mmap, v};
+            reads2use[(string)vv] = 1;
+        }
+    }
+
     for (PafEntry g{gaf_view}; !g.isterm; g = PafEntry{gaf_view}) {
         mmap_view gid {&gaf_mmap, g.id};
 
         for (const gview v : g.contigs) {
             mmap_view vv{&gaf_mmap, v};
-            reads2use[(string)vv] = 1;
-
-
+            auto it = blacklist_contigs.find((string) vv);
+            if(it != blacklist_contigs.end() && it->second == ContigType::Chromosome){
+                auto it2 = reads2use.find((string)vv);
+                if(it2!=reads2use.end()){
+                    it2->second = 0;
+                }
+            }
         }
     }
 

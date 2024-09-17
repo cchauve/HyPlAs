@@ -11,7 +11,7 @@ refdir  = "/groups/hachgrp/projects/dev-plasmids/raw-data/ncbi-reference-genomes
 outpath = config['outpath']
 rawdata = config['rawdata']
 firstN = -1 if "firstN" not in config else config["firstN"]
-
+PLASMID_SAVE_ITER = 1
 
 
 #config['tools'] = ['plassembler', 'skesa', 'unicycler-sr']
@@ -35,12 +35,12 @@ def generate_fasta(fasta):
         if l[0] == ">":
             if len(seq) == 0:
                 name = l[1:].split(" ")[0]
-                header = l[1:]
+                header = " ".join(l.split(" ")[1:])
                 continue
             yield (name, header,"".join(seq))
             seq = list()
             name = l[1:].split(" ")[0]
-            header = l[1:]
+            header =  " ".join(l.split(" ")[1:])
 
         else:
             seq.append(l)
@@ -129,16 +129,20 @@ rule all_selection_qc:
 
 rule all_plassembler:
     input:
-        expand(f"{outpath}/{{sample}}/plassembler/plassembler_plasmids.fasta",sample=config["samples"]),
+        expand(f"{outpath}/{{sample}}/plassembler_flye/plassembler_plasmids.fasta",sample=config["samples"]),
+
+rule all_unicycler_lra:
+    input:
+        expand(f"{outpath}/{{sample}}/sra-unicycler/pcc-{{pcc}}/lra-unicycler_i{PLASMID_SAVE_ITER}/assembly.circular.fasta", sample= config["samples"], pcc=["plat_minus_plas"]),
 
 rule all_stats:
     input:
-        expand(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/selection-qc/plasmid_selected{{pu}}.coverage.tsv",sample=config["samples"], sra=config["sra"], lra=config["lra"], pcc=config["pcc"], pu =["","_pu"]),
+        #   expand(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/selection-qc/plasmid_selected{{pu}}.coverage.tsv",sample=config["samples"], sra=config["sra"], lra=config["lra"], pcc=config["pcc"], pu =["","_pu"]),
         expand(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/selection-qc/plasmid_selected{{pu}}.coverage.tsv",sample=config["samples"], sra=config["sra"], lra=config["lra"], pcc=["plat_minus_plas"],  pu =["","_pu"]),
         
         expand(f"{outpath}/{{sample}}/qc/toplasmids.coverage.tsv",sample=config["samples"]),
 #        expand(f"{outpath}/{{sample}}/plassembler-qc/toplasmids.coverage.tsv",sample=config["samples"]),
-
+"""
 rule find_circular_plasmids:
     input:
         f"{outpath}/{{sample}}/{{gfa}}.gfa"
@@ -207,7 +211,7 @@ rule find_circular_plasmids:
                             "single",
                             ]), file=thand)
 
-            
+  """         
 
 rule combine_results:
     input:
@@ -219,6 +223,39 @@ rule combine_results:
         "cat {input.fasta} {input.sr_fasta} > {output}"
 
 db_path = f"{outpath}/plassembler-db/"
+
+rule Plassembler_flye:
+    input:
+        lr = get_sample_lr,
+#        sr1 = get_sample_sr1,
+#        sr2 = get_sample_sr2,
+        sr = get_sample_sr,
+        db = f"{db_path}"
+    output:
+        out_dir = temp(directory(f"{outpath}/{{sample}}/plassembler_flye")),
+        fasta = f"{outpath}/{{sample}}/plassembler_flye/plassembler_plasmids.fasta",
+        summary = f"{outpath}/{{sample}}/plassembler_flye/plassembler_summary.tsv",
+        plasmid_fastq = f"{outpath}/{{sample}}/plassembler_flye/plasmid_fastqs/plasmids_long.fastq",
+    params:
+        par = "-c 1000000",
+        sr_param = lambda wildcards: " ".join([f"-{i} {x}" for i,x in enumerate(get_sample_sr(wildcards), start=1)])
+    threads:
+        64
+    resources:
+        runtime=lambda wc, attempt: attempt * 6 * 60 - 1,
+        mem_mb=1024*700, 
+    benchmark:
+        f"{outpath}/{{sample}}/plassembler_flye.benchmark.tsv"
+    shell:
+        "plassembler run {params.sr_param}"
+        " -l {input.lr}"
+        " -d {input.db}"
+        " -o {output.out_dir} --force"
+        " -t {threads}"
+        " {params.par}"
+        " --keep_fastqs"
+
+
 
 rule Plassembler:
     input:
@@ -238,7 +275,7 @@ rule Plassembler:
     threads:
         64
     resources:
-        runtime=lambda wc, attempt: attempt * 24 * 60,
+        runtime=lambda wc, attempt: attempt * 6 * 60 -1,
         mem_mb=1024*700, 
     benchmark:
         f"{outpath}/{{sample}}/plassembler.benchmark.tsv"
@@ -337,21 +374,43 @@ rule skesa:
 rule extract_missing_long_reads:
     input:
         lr = f"{outpath}/{{sample}}/qc/trim.lr.fastq.gz",
-        paf = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.saved.paf",
+        paf = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.{{iter}}.paf",
+        gaf = f"{outpath}/{{sample}}/sra-{{sra}}/minigraph/lr2sra.gaf",
+        tsv = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/classify/result_p.tsv",
     output:
-        lr = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.saved.fastq.gz",
+        lr = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.{{iter}}.fastq.gz",
     shell:
         "./src/select_missing_reads"
         " {input.paf}"
+        " {input.gaf}"
         " {input.lr}"
         " {output.lr}"
+        " {input.tsv}"
 
+for iter in range(PLASMID_SAVE_ITER):
+    rule :
+        input:
+            lr = f"{outpath}/{{sample}}/qc/trim.lr.fastq.gz",
+            lr_plasmid = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.fastq.gz",
+
+            prev = [f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.{i}.fastq.gz" for i in range(iter+1)],
+        output:
+            paf = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.{iter+1}.paf",
+        threads:
+            32
+        shell:
+            "minimap2"
+            " <( ../bio/build/bin/innotin {input.lr} <(cat {input.lr_plasmid} {input.prev}))"
+            " {input.lr_plasmid}"
+            " {input.prev}"
+            " -o {output.paf}"
+            " -t {threads}"
 rule find_missing_long_reads:
     input:
         lr = f"{outpath}/{{sample}}/qc/trim.lr.fastq.gz",
         lr_plasmid = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.fastq.gz",
     output:
-        paf = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.saved.paf",
+        paf = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.0.paf",
     threads:
         64
     shell:
@@ -360,6 +419,59 @@ rule find_missing_long_reads:
         " {input.lr_plasmid}"
         " -o {output.paf}"
         " -t {threads}"
+
+rule pick_unicycler_complete_contigs:
+    input:
+        f"{outpath}/{{sample}}/sra-unicycler/pcc-{{pcc}}/lra-unicycler_i{{piter}}/assembly.fasta",
+    output:
+        f"{outpath}/{{sample}}/sra-unicycler/pcc-{{pcc}}/lra-unicycler_i{{piter}}/assembly.circular.fasta",
+    params:
+        max_length_plasmid = 1_500_000,
+    run:
+        with open(output[0], 'w') as hand:
+            for n,h,s in generate_fasta(input[0]):
+                if "circular" in h and len(s) < params.max_length_plasmid:
+                    print(f">{n} {h}\n{s}", file=hand)
+
+
+rule continue_unicycler:
+    input:
+        assembly = f"{outpath}/{{sample}}/sra-unicycler/pcc-{{pcc}}/lra-unicycler_i{{piter}}",
+        sr1 = f"{outpath}/{{sample}}/qc/{{sample}}.sr1.fastq.gz",
+        sr2 = f"{outpath}/{{sample}}/qc/{{sample}}.sr2.fastq.gz",
+        lr_plasmid = f"{outpath}/{{sample}}/sra-unicycler/pcc-{{pcc}}/select-lr/plasmid.fastq.gz",
+        lr_plasmid2 = lambda w: [f"{outpath}/{w.sample}/sra-unicycler/pcc-{w.pcc}/select-lr/plasmid.{i}.fastq.gz" for i in range(int(w.piter))],
+        lr_unknown = f"{outpath}/{{sample}}/sra-unicycler/pcc-{{pcc}}/select-lr/unknown.fastq.gz",
+    output:
+        combined_lr =temp(f"{outpath}/{{sample}}/sra-unicycler/pcc-{{pcc}}/select-lr/combined_i{{piter}}.fastq.gz"),
+        done = f"{outpath}/{{sample}}/sra-unicycler/pcc-{{pcc}}/lra-unicycler_i{{piter}}.done",
+        fasta = f"{outpath}/{{sample}}/sra-unicycler/pcc-{{pcc}}/lra-unicycler_i{{piter}}/assembly.fasta",
+    threads:
+        64
+    params:
+        par = "",
+    resources:
+        runtime=lambda wc,attempt:(attempt*4)*6*60-1 
+    shell:
+        "zcat {input.lr_plasmid}"
+        " {input.lr_plasmid2}"
+        " {input.lr_unknown}"
+        " | pigz -p {threads} > {output.combined_lr} &&"
+        ""
+        " unicycler -1 {input.sr1}"
+        " -2 {input.sr2}"
+        " -l {output.combined_lr}"
+        " -o {input.assembly}"
+        " -t {threads}"
+        " {params.par} && touch {output.done}"
+
+rule copy_unicycler_sr:
+    input:
+        f"{outpath}/{{sample}}/sra-unicycler/assemble",
+    output:
+        directory(f"{outpath}/{{sample}}/sra-unicycler/pcc-{{pcc}}/lra-unicycler_i{{piter,[0-9]+}}"),
+    shell:
+        "cp -r {input} {output} && rm {output}/assembly.fasta {output}/assembly.gfa"
 
 rule unicycler_sr:
     input:
@@ -625,7 +737,7 @@ rule assemble_selected_reads_with_magpie_GT:
 rule assemble_selected_reads_with_magpie:
     input:
         lr_plasmid = [f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.fastq.gz",
-        f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.saved.fastq.gz",
+        f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.0.fastq.gz",
         f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/unknown.fastq.gz"],
     output:
         fasta = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/lra-{{lra}}/lr-assembly.fasta",
@@ -904,7 +1016,7 @@ rule minimap2GT_plus_unknown:
         filter_bin = "src/filter_plasmid_sam.py", 
         ref=f"{refdir}/{{sample}}.fasta",
         lr_plasmid = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.fastq.gz",
-        lr_plasmid2 = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.saved.fastq.gz",
+        lr_plasmid2 = [f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.{i}.fastq.gz" for i in range(PLASMID_SAVE_ITER)],
         lr_unknown = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/unknown.fastq.gz",
     output:
         sam=temp(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/selection-qc/plasmid_selected_pu.sam"),
@@ -922,13 +1034,13 @@ rule minimap2GT_plus_unknown:
         " -x map-ont"
         " -a -o {output.sam}"
         " && python {input.filter_bin} {output.sam} {output.samf}"
-        " && samtools sort {output.samf} -@ 8 -o {output.bam}"
+        " && samtools sort {output.samf} -@ 8 -o {output.bam} && echo done"
 rule minimap2GT:
     input:
         filter_bin = "src/filter_plasmid_sam.py", 
         ref=f"{refdir}/{{sample}}.fasta",
         lr_plasmid = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.fastq.gz",
-        lr_plasmid2 = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.saved.fastq.gz",
+        lr_plasmid2 = [f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.{i}.fastq.gz" for i in range(PLASMID_SAVE_ITER)],
     output:
         sam=temp(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/selection-qc/plasmid_selected.sam"),
         samf=temp(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/selection-qc/plasmid_selected_filtered.sam"),
