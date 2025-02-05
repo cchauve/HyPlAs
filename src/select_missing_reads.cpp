@@ -285,14 +285,18 @@ int process_gaf(int argc, char **argv) {
     mio::mmap_source paf_mmap = mio::make_mmap_source(argv[1], error);
     if (error) {
         const auto &errmsg = error.message();
-        std::fprintf(stderr, "error mapping file: %s, exiting...\n",
+
+        std::fprintf(stderr, "error paf mapping file: %s, exiting...\n",
                      errmsg.c_str());
-        return error.value();
+        std::fprintf(stderr, "Creating empty output since there are no mappings");
+        FILE *plasmid_out = popen((string{"gzip - > "} + string{argv[4]}).c_str(), "w");
+        pclose(plasmid_out);
+        return 0;
     }
     mio::mmap_source gaf_mmap = mio::make_mmap_source(argv[2], error);
     if (error) {
         const auto &errmsg = error.message();
-        std::fprintf(stderr, "error mapping file: %s, exiting...\n",
+        std::fprintf(stderr, "error gfa mapping file: %s, exiting...\n",
                      errmsg.c_str());
         return error.value();
     }
