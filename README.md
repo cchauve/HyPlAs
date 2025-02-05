@@ -1,10 +1,14 @@
 
+## Installation
 
+```
+conda create -f environment.yml
+conda activate hyplass-env
+make
+```
 
 ## Usage
 
 ```
-make
-
 python src/hyplass.py
 ```
