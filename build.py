@@ -129,6 +129,8 @@ def install_racon_function():
 
     cmd = CMD("cp", "bin/racon", f"{ENV_DIR}/bin")
     subprocess.run(cmd)
+    
+    os.chdir(cwd)
 
 if __name__ == "__main__":
     global ENV_DIR
@@ -141,7 +143,7 @@ if __name__ == "__main__":
         ["prodigal", (None, None, install_prodigal_function), []],
         ["spades", (None, None, install_spades_function), []], 
         ["racon", (None, None, install_racon_function), []],
-        ["unicycler", ("pip", "git+https://github.com/rrwick/Unicycler.git", None), ["spades", "racon", "blast+"]],
+        ["unicycler", ("pip", "git+https://github.com/f0t1h/Unicycler.git", None), ["spades", "racon", "blast+"]],
         ["hyplass", (None, None, install_hyplass_function), ["unicycler", "platon", "packaging", "numpy", "pandas"]],
         ["minigraph", (None, None, install_minigraph_function), []]
     ])
