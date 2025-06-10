@@ -26,5 +26,5 @@ rm db.tar.gz
 ## Usage
 
 ```
-python src/hyplass.py --platon-db db
+python src/hyplass.py --platon-db db -s sr_*.fastq -l lr.fastq.gz -o hyplass-out/ -t threads -p prop_rounds      
 ```
