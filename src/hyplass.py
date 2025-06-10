@@ -134,7 +134,6 @@ def run_unicycler_sr_assembly(args):
         logger.error(f"Unicycler failed to finish. Please check its logs at {unicycler_sr_path}/unicycler.log")
         exit(-1)
 def run_unicycler_lr_assembly(args, plasmid_files_list):
-    #Unicycler_runner = "/groups/hachgrp/projects/dev-plasmids/code/Unicycler/unicycler-runner.py"
     Unicycler_runner = "unicycler"
     #Check unicycler
     if validate_tool(Unicycler_runner, UNICYCLER_VERSION_SPEC):
@@ -255,6 +254,7 @@ def run_long_read_selection(args, prediction_path, graph_alignment_path):
                     "skip",
                     unknown_output
             ]
+            print(" ".join(split_plasmid_read_cmd), file=sys.stderr)
             ret = subprocess.run( split_plasmid_read_cmd)
 
     if ret.returncode != 0:
@@ -287,7 +287,7 @@ def process_platon_output(args, platon_path, max_chr_rds=-7.9, min_plasmid_rds=0
 
     return outpath
 
-def find_missing_long_reads(args, plasmid_files_list): #TODO Convert processes to unblocking
+def find_missing_long_reads(args, unknown_file, plasmid_files_list): #TODO Convert processes to unblocking
     
     minimap_output_path = f"{args.output_directory}/prop_lr/lr.round.{len(plasmid_files_list)-1}.paf"
     if not args.force and os.path.isfile(minimap_output_path):
@@ -310,7 +310,7 @@ def find_missing_long_reads(args, plasmid_files_list): #TODO Convert processes t
 
     innotin_cmd = [
             "innotin",
-            *args.long_reads,
+            unknown_file,
             tfw.name
     ]
 
@@ -584,9 +584,9 @@ def main():
 
     plasmid_reads_file, unknown_reads_file = run_long_read_selection(args, prediction_tsv_path, graph_alignment_path)
     
-    plasmid_files = [unknown_reads_file, plasmid_reads_file]
+    plasmid_files = [plasmid_reads_file]
     for i in range(args.propagate_rounds):
-        plasmid_alignment = find_missing_long_reads(args, plasmid_files)
+        plasmid_alignment = find_missing_long_reads(args, unknown_reads_file, plasmid_files)
         if line_count(plasmid_alignment) == 0:
             logger.info(f"{plasmid_alignment} has no alignments. Stopping the propagation!")
             break
