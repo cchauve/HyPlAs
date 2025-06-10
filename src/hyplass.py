@@ -223,7 +223,7 @@ def run_minigraph_longreads_to_sr_assembly(args):
         exit(-1)
     return graph_aligment_output_file
 def run_long_read_selection(args, prediction_path, graph_alignment_path):
-    if validate_tool("./src/split_plasmid_reads", SpecifierSet(">0"), version_cmd="", version_split_lambda=lambda x:"1"):
+    if validate_tool("split_plasmid_reads", SpecifierSet(">0"), version_cmd="", version_split_lambda=lambda x:"1"):
         exit(1)
     
     plasmid_long_reads_path = f"{args.output_directory}/plasmid_long_reads"
@@ -247,7 +247,7 @@ def run_long_read_selection(args, prediction_path, graph_alignment_path):
 
         with open(tfw.name, mode='r') as tfr:
             split_plasmid_read_cmd = [
-                    "./src/split_plasmid_reads",
+                    "split_plasmid_reads",
                     graph_alignment_path,
                     tfw.name,
                     prediction_path,
@@ -293,7 +293,7 @@ def find_missing_long_reads(args, plasmid_files_list): #TODO Convert processes t
     if not args.force and os.path.isfile(minimap_output_path):
         logger.warning(f"{minimap_output_path} exists!. not running it again. Delete the files or use --force")
         return minimap_output_path
-    if validate_tool("./src/innotin", SpecifierSet(">0"), version_cmd="", version_split_lambda=lambda x:"1"):
+    if validate_tool("innotin", SpecifierSet(">0"), version_cmd="", version_split_lambda=lambda x:"1"):
         exit(1)
     if validate_tool("minimap2", MINIMAP2_VERSION_SPEC, version_split_lambda=lambda x:x):
         exit(1)
@@ -309,7 +309,7 @@ def find_missing_long_reads(args, plasmid_files_list): #TODO Convert processes t
     tfw.close()
 
     innotin_cmd = [
-            "./src/innotin",
+            "innotin",
             *args.long_reads,
             tfw.name
     ]
@@ -343,7 +343,7 @@ def extract_missing_long_reads(args, plasmid_alignment, graph_alignment_path, pr
     if not args.force and os.path.isfile(extracted_lr_fastq):
         logger.warning(f"{extracted_lr_fastq} exists!. not running it again. Delete the files or use --force")
         return extracted_lr_fastq
-    if validate_tool("./src/select_missing_reads", SpecifierSet(">0"), version_cmd="", version_split_lambda=lambda x:"1"):
+    if validate_tool("select_missing_reads", SpecifierSet(">0"), version_cmd="", version_split_lambda=lambda x:"1"):
         exit(1)
     tfw =  tempfile.NamedTemporaryFile(delete=False)
     cat_lr_cmd = [
@@ -356,7 +356,7 @@ def extract_missing_long_reads(args, plasmid_alignment, graph_alignment_path, pr
 
 
     smr_cmd = [
-            "./src/select_missing_reads",
+            "select_missing_reads",
             plasmid_alignment,
             graph_alignment_path,
             tfw.name,

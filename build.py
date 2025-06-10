@@ -84,6 +84,14 @@ def install_spades_function():
 def install_hyplass_function():
     cmd = CMD("make")
     subprocess.run(cmd)
+    
+    cmd = CMD("cp",
+       "src/innotin",
+       "src/select_missing_reads",
+       "src/split_plasmid_reads",
+       f"{ENV_DIR}/bin"
+        )
+    subprocess.run(cmd)
 
 def install_minigraph_function():
     cmd = CMD("git", "clone", "https://github.com/lh3/minigraph.git")
@@ -95,7 +103,6 @@ def install_minigraph_function():
     cmd = CMD("git", "checkout", "v0.21")
     subprocess.run(cmd)
 
-
     cmd = CMD("make")
     subprocess.run(cmd)
 
@@ -103,6 +110,26 @@ def install_minigraph_function():
     subprocess.run(cmd)
 
     os.chdir(cwd)
+
+def install_racon_function():
+    cmd = CMD("git", "clone", "--recursive", "https://github.com/lbcb-sci/racon.git", "racon")
+    subprocess.run(cmd)
+
+    cmd = CMD("mkdir", "-p", "racon/build")
+    subprocess.run(cmd)
+
+    cwd = os.getcwd()
+    os.chdir("racon/build")
+    
+    cmd = CMD("cmake", "-DCMAKE_BUILD_TYPE=Release", "..")
+    subprocess.run(cmd)
+
+    cmd = CMD("make")
+    subprocess.run(cmd)
+
+    cmd = CMD("cp", "bin/racon", f"{ENV_DIR}/bin")
+    subprocess.run(cmd)
+
 if __name__ == "__main__":
     global ENV_DIR
     ENV_DIR = str(Path(sys.argv[1]).resolve())
@@ -113,6 +140,7 @@ if __name__ == "__main__":
         ["platon", ("pip","cb-platon",None), ["prodigal"]],
         ["prodigal", (None, None, install_prodigal_function), []],
         ["spades", (None, None, install_spades_function), []], 
+        ["racon", (None, None, install_racon_function), []],
         ["unicycler", ("pip", "git+https://github.com/rrwick/Unicycler.git", None), ["spades", "racon", "blast+"]],
         ["hyplass", (None, None, install_hyplass_function), ["unicycler", "platon", "packaging", "numpy", "pandas"]],
         ["minigraph", (None, None, install_minigraph_function), []]
