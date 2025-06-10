@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 import re
 
-import mappy as mp
+
 import pandas as pd
 import numpy as np 
 #TODO pull version specs back to minimum working versions
@@ -121,6 +121,7 @@ def run_unicycler_sr_assembly(args):
             "unicycler",
             "-o", unicycler_sr_path, 
             "-t", str(args.threads),
+            "--kmers", "51",
             "-1", args.short_reads[0],
     ]
     if len(args.short_reads) > 1:
@@ -412,6 +413,7 @@ def save_forgotten_short_read_only_circular_contigs(args):
 def save_forgotten_miniasm_only_circular_contigs(args, min_chromosomal_length=1_000_000, min_cov_ratio=.8, min_allowed_sr_coverage=.8):
     #Step 1 Check if a circular miniasm unitig exists
 
+    import mappy as mp
     miniasm_gfa_path = f"{args.output_directory}/unicycler_lr/miniasm_assembly/12_unitig_graph.gfa"
     
     if not os.path.isfile(miniasm_gfa_path):
