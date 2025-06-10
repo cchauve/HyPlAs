@@ -51,7 +51,7 @@ class tool:
 class toolset:
     tools : Dict[str,"tool"]
 
-    def __init__(self, tools):
+    def __init__(self, *tools):
         self.tools = {t[0] : tool(t[0], t[1], t[2]) for t in tools}
 
     def install(self, tool_name):
@@ -106,9 +106,15 @@ def install_spades_function(*x):
     subprocess.run(cmd)
 
 def install_hyplass_function(*x):
+    
+
+    current_dir = os.getcwd()
+    os.chdir(SCRIPT_DIR)
     cmd = CMD("make")
     subprocess.run(cmd)
     
+
+
     cmd = CMD("cp",
        "src/innotin",
        "src/select_missing_reads",
@@ -116,6 +122,8 @@ def install_hyplass_function(*x):
        f"{ENV_DIR}/bin"
         )
     subprocess.run(cmd)
+    
+    os.chdir(current_dir)
 
 def install_minigraph_function(*x):
     cmd = CMD("git", "clone", "https://github.com/lh3/minigraph.git")
@@ -163,16 +171,21 @@ if __name__ == "__main__":
     parser.add_argument("env", help="Path to virtual environment")
     parser.add_argument("-n", "--dry-run", help="Dry run", action="store_true")
     parser.add_argument("--tool", help="Tool to install", default="hyplass")
-
+    parser.add_argument("--working-directory", help="Working directory for building tools", default=".")
     args = parser.parse_args()
 
     global ENV_DIR
     global DRY_RUN
+    global SCRIPT_DIR
     DRY_RUN = args.dry_run
-    ENV_DIR = args.env
+    ENV_DIR = str(Path(args.env).resolve())
+    SCRIPT_DIR = os.getcwd()
+    if args.working_directory != ".":
+        subprocess.run(["mkdir", "-p", args.working_directory])
+        os.chdir(args.working_directory)
 
 
-    t = toolset([
+    t = toolset(
         ["hyplass", install_hyplass_function, ["unicycler", "platon", "packaging", "numpy", "pandas", "minigraph"]],
         ["pandas", "pip", ["numpy"]],
         ["numpy", "pip", []],
@@ -183,6 +196,6 @@ if __name__ == "__main__":
         ["racon", install_racon_function, []],
         ["unicycler", ["pip", "git+https://github.com/f0t1h/Unicycler.git"], ["spades", "racon"]],
         ["minigraph", install_minigraph_function, []]
-    ])
+    )
 
     t.install(args.tool)
