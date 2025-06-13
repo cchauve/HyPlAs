@@ -10,10 +10,10 @@ make
 
 Or with virtualenv
 ```
+source module_load.sh #For cedar. should be installed if not available
 python -m venv hyplass_env
 source hyplass_env/bin/activate
 python3 build.py hyplass_env
-source module_load.sh #For cedar. should be installed if not available
 ```
 ## Usage
 
