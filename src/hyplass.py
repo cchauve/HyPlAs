@@ -9,7 +9,7 @@ from packaging.specifiers import SpecifierSet
 import logging
 logger = logging.getLogger(__name__)
 import re
-
+from collections import defaultdict
 
 import pandas as pd
 import numpy as np 
@@ -121,8 +121,9 @@ def run_unicycler_sr_assembly(args):
             "unicycler",
             "-o", unicycler_sr_path, 
             "-t", str(args.threads),
-            "--kmers", "51",
+            #"--kmers", "51",
             "-1", args.short_reads[0],
+            "--min_component_size", "10"
     ]
     if len(args.short_reads) > 1:
         unicycler_cmd.append("-2")
@@ -199,8 +200,10 @@ def run_minigraph_longreads_to_sr_assembly(args):
     if validate_tool("minigraph", MINIGRAPH_VERSION_SPEC, version_split_lambda=lambda x:x):
         exit(1)
    
+
     short_read_draft_assembly_graph = f"{args.output_directory}/unicycler_sr/assembly.gfa"
-    
+    short_read_draft_assembly_graph_fix = f"{args.output_directory}/unicycler_sr/assembly_segfix.gfa"
+    fix_gfa_empty_segments(short_read_draft_assembly_graph, short_read_draft_assembly_graph_fix) 
     graph_aligment_output_file = f"{args.output_directory}/lr2assembly.gaf"
 
     if not args.force and os.path.isfile(graph_aligment_output_file):
@@ -208,8 +211,8 @@ def run_minigraph_longreads_to_sr_assembly(args):
         return graph_aligment_output_file
     minigraph_cmd = [
             "minigraph",
-            short_read_draft_assembly_graph,
-            *args.long_reads,
+            short_read_draft_assembly_graph_fix,
+            args.long_reads,
             "-t", str(args.threads),
             "-x", "lr",
             "-c"
@@ -230,39 +233,33 @@ def run_long_read_selection(args, prediction_path, graph_alignment_path):
 
     plasmid_output = f"{plasmid_long_reads_path}/plasmid.fastq.gz"
     unknown_output = f"{plasmid_long_reads_path}/unknown.fastq.gz"
+    unmapped_output = f"{plasmid_long_reads_path}/unmapped.fastq.gz"
 
     if not args.force and os.path.isfile(plasmid_output) and os.path.isfile(unknown_output):
         logger.warning(f"{plasmid_output} and {unknown_output} exists!. not running it again. Delete the files or use --force")
         return plasmid_output, unknown_output
 
-    with tempfile.NamedTemporaryFile(delete=False) as tfw:
-        cat_lr_cmd = [
-            "zcat",
-            *args.long_reads
-            ]
 
-        subprocess.run(cat_lr_cmd, stdout=tfw, stderr=sys.stderr)
-        tfw.close()
 
-        with open(tfw.name, mode='r') as tfr:
-            split_plasmid_read_cmd = [
-                    "split_plasmid_reads",
-                    graph_alignment_path,
-                    tfw.name,
-                    prediction_path,
-                    plasmid_output,
-                    "skip",
-                    unknown_output
-            ]
-            print(" ".join(split_plasmid_read_cmd), file=sys.stderr)
-            ret = subprocess.run( split_plasmid_read_cmd)
+
+    split_plasmid_read_cmd = [
+            "split_plasmid_reads",
+            graph_alignment_path,
+            args.long_reads,
+            prediction_path,
+            plasmid_output,
+            "skip",
+            unknown_output,
+            unmapped_output,
+    ]
+    print(" ".join(split_plasmid_read_cmd), file=sys.stderr)
+    ret = subprocess.run( split_plasmid_read_cmd)
 
     if ret.returncode != 0:
         logger.error(f"split_plasmid_reads failed to finish. Please check its logs at {args.output_directory}/split_plasmid_reads.log\nWas running {' '.join(split_plasmid_read_cmd)}")
         exit(-1)
-    else:
-        os.unlink(tfw.name)
-    return plasmid_output, unknown_output
+
+    return plasmid_output, unknown_output, unmapped_output
 
 def process_platon_output(args, platon_path, max_chr_rds=-7.9, min_plasmid_rds=0.7):
     df = pd.read_csv(f"{platon_path}/result.tsv", sep="\t")
@@ -287,7 +284,7 @@ def process_platon_output(args, platon_path, max_chr_rds=-7.9, min_plasmid_rds=0
 
     return outpath
 
-def find_missing_long_reads(args, unknown_file, plasmid_files_list): #TODO Convert processes to unblocking
+def find_missing_long_reads(args, plasmid_files_list, unknown_files): #TODO Convert processes to unblocking
     
     minimap_output_path = f"{args.output_directory}/prop_lr/lr.round.{len(plasmid_files_list)-1}.paf"
     if not args.force and os.path.isfile(minimap_output_path):
@@ -298,9 +295,11 @@ def find_missing_long_reads(args, unknown_file, plasmid_files_list): #TODO Conve
     if validate_tool("minimap2", MINIMAP2_VERSION_SPEC, version_split_lambda=lambda x:x):
         exit(1)
     tfw = tempfile.NamedTemporaryFile(delete=False)
+
+
     cat_reads_cmd = [
         "zcat",
-        *plasmid_files_list
+        *unknown_files
     ]
 
 
@@ -310,8 +309,8 @@ def find_missing_long_reads(args, unknown_file, plasmid_files_list): #TODO Conve
 
     innotin_cmd = [
             "innotin",
-            unknown_file,
-            tfw.name
+            tfw.name,
+            *plasmid_files_list
     ]
 
     tfw2 = tempfile.NamedTemporaryFile(delete=False)
@@ -329,7 +328,7 @@ def find_missing_long_reads(args, unknown_file, plasmid_files_list): #TODO Conve
             tfw2.name,
             *plasmid_files_list,
             "-o", minimap_output_path,
-            "-t", str(args.threads)
+            "-t", str(args.threads),
     ]
     
     ret = subprocess.run(minimap2_cmd)
@@ -345,27 +344,19 @@ def extract_missing_long_reads(args, plasmid_alignment, graph_alignment_path, pr
         return extracted_lr_fastq
     if validate_tool("select_missing_reads", SpecifierSet(">0"), version_cmd="", version_split_lambda=lambda x:"1"):
         exit(1)
-    tfw =  tempfile.NamedTemporaryFile(delete=False)
-    cat_lr_cmd = [
-        "zcat",
-        *args.long_reads
-        ]
-
-    subprocess.run(cat_lr_cmd, stdout=tfw, stderr=sys.stderr)
-    tfw.close()
 
 
     smr_cmd = [
             "select_missing_reads",
             plasmid_alignment,
             graph_alignment_path,
-            tfw.name,
+            args.long_reads,
             extracted_lr_fastq,
             prediction_tsv_path
     ]
 
     ret = subprocess.run(smr_cmd)
-    os.unlink(tfw.name)
+
 
     if ret.returncode != 0:
         logger.error(f"Long read extraction failed!")
@@ -530,9 +521,34 @@ def save_forgotten_miniasm_only_circular_contigs(args, min_chromosomal_length=1_
     os.unlink(tfw_name)
 
     return recovered
+
+def fix_gfa_empty_segments(gfa_path, out_path):
+    empty_segments = set()
+    incoming = defaultdict(list)
+    outgoing = defaultdict(list)
+    with open(out_path, 'w') as hand:
+        for line in open(gfa_path, 'r'):
+            fields = line.split("\t")
+            if line[0] == "S":
+                if fields[2] == "":
+                    empty_segments.add(fields[1])
+                else:
+                    print(line.rstrip(), file=hand)
+            elif line[0] == "L":
+                if fields[1] in empty_segments:
+                    outgoing[fields[1]].append((fields[3],fields[4]))
+                elif fields[3] in empty_segments:
+                    incoming[line[3]].append((fields[1],fields[2]))
+                else:
+                    print(line.rstrip(), file=hand)
+        for seg in empty_segments:
+            for i in incoming[seg]:
+                for o in outgoing[seg]:
+                    print(f"L\t{i[0]}\t{i[1]}\t{o[0]}\t{o[1]}\t0M", file=hand)
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-l","--long-reads",help="long reads fastq file", nargs="+", default=[])
+    parser.add_argument("-l","--long-reads",help="long reads fastq file")
     parser.add_argument("-s","--short-reads",help="short reads fastq files",nargs="+",default=[])
     parser.add_argument("--sr-assembly",help="short reads assembly graph")
     parser.add_argument("-o","--output-directory",required=True)
@@ -549,25 +565,28 @@ def main():
 
     if len(args.short_reads) == 0:
         print("Short reads are not provided!", file=sys.stderr)
-    if len(args.long_reads) == 0:
+    if not args.long_reads:
         print("Long reads are not provided!", file=sys.stderr)
 
     logger.info(args)
-    
+
+
     if args.sr_assembly is not None:
         _gfa_path =f"{args.output_directory}/unicycler_sr/002_depth_filter.gfa"
-        _gfa_path2 =f"{args.output_directory}/unicycler_sr/assembly.gfa"
+#        _gfa_path2 =f"{args.output_directory}/unicycler_sr/assembly.gfa"
         _fasta_path = f"{args.output_directory}/unicycler_sr/assembly.fasta"
         unicycler_sr_path = f"{args.output_directory}/unicycler_sr"
         os.makedirs(unicycler_sr_path, exist_ok=True)
         shutil.copyfile(args.sr_assembly, _gfa_path)
-        shutil.copyfile(args.sr_assembly, _gfa_path2)
+        #fix_gfa_empty_segments(unicycler_sr_path, _gfa_path)
+#        shutil.copyfile(args.sr_assembly, _gfa_path2)
+        subprocess.run(["unicycler", "-s", "src/mock.fq", "-o", unicycler_sr_path]) 
         with open (_gfa_path,'r') as hand, open(_fasta_path, 'w') as whand:
-            for line in hand:
-                if line[0] == "S":
-                    line=line.rstrip().split("\t")
-                    if len(line[2]) > min_fasta_seq_len:
-                        print(f">{line[1]}\n{line[2]}", file=whand)
+                for line in hand:
+                    if line[0] == "S":
+                        line=line.rstrip().split("\t")
+                        if len(line[2]) > min_fasta_seq_len:
+                            print(f">{line[1]}\n{line[2]}", file=whand)
 
     else:
         run_unicycler_sr_assembly(args)
@@ -581,12 +600,25 @@ def main():
     #If there are no alignments
     # Check the platon output to grab circularized sr plasmids
     # and terminate
+    final_assembly_path = f"{args.output_directory}/assembly.final.fasta"
 
-    plasmid_reads_file, unknown_reads_file = run_long_read_selection(args, prediction_tsv_path, graph_alignment_path)
-    
+    plasmid_reads_file, unknown_reads_file, unmapped_reads_file = run_long_read_selection(args, prediction_tsv_path, graph_alignment_path)
+    with open(plasmid_reads_file, "rb") as f:
+        num_lines = sum(1 for _ in f)  
+    if num_lines < 4:
+        print("No plasmid long reads are found",file=sys.stderr)
+        unicycler_fasta_path = f"{args.output_directory}/unicycler_sr/assembly.fasta"
+        with open(final_assembly_path, 'w') as hand:
+            for n, h, s in generate_fasta(unicycler_fasta_path):
+                if "circular" in h:
+                    print(f">{n} {h}\n{s}", file=hand)
+
+        return 0
     plasmid_files = [plasmid_reads_file]
     for i in range(args.propagate_rounds):
-        plasmid_alignment = find_missing_long_reads(args, unknown_reads_file, plasmid_files)
+
+        plasmid_alignment = find_missing_long_reads(args, plasmid_files, [unmapped_reads_file, unknown_reads_file])
+        #plasmid_alignment = find_missing_long_reads(args, args.long_reads, plasmid_files)
         if line_count(plasmid_alignment) == 0:
             logger.info(f"{plasmid_alignment} has no alignments. Stopping the propagation!")
             break
@@ -598,7 +630,7 @@ def main():
     
     lr_assembly_path = run_unicycler_lr_assembly(args, plasmid_files)
 
-    final_assembly_path = f"{args.output_directory}/assembly.final.fasta"
+
 
     with open(final_assembly_path, 'w') as hand:
         for n, h, s in generate_fasta(lr_assembly_path):
