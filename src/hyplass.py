@@ -36,10 +36,21 @@ def temp_fifo():
 
 
 def line_count(file):
+    """
+        equivalent to `wc -l`
+    """
     with open(file, "rb") as f:
         return  sum(1 for _ in f)
 
 def generate_fasta(fasta):
+    """
+        Given path to a fasta file, return a generator (name, header, sequence) of each record in the fasta file.
+        :param fasta: path to a fasta
+        :returns: generator of tuple[str, str, str]
+        @example:
+            for name, header, seq in generate_fasta(fasta):
+                # do work 
+    """
     name = "NULL"
     seq = list()
     if fasta.endswith(".gz"):
@@ -65,6 +76,16 @@ def generate_fasta(fasta):
 
 
 def validate_tool(tool_name, vspec, version_cmd="--version", version_split_lambda=lambda x:x.split()[1]):
+    """
+        Validate the tool and its version
+        :param tool_name: the name of tool
+        :param vspec: Version specification
+        :param version_cmd: the command to get the tool's version
+        :param version_split_lambda: the lambda function to split the version string
+        :return: 0 for success, -1 otherwise
+        @example:
+            validate_tool("platon", SpecifierSet(">=0.17"))
+    """
     tool_path = shutil.which(tool_name)
     if tool_path == None:
         logger.error(f"Cannot find {tool_name}!") 
@@ -81,7 +102,15 @@ def validate_tool(tool_name, vspec, version_cmd="--version", version_split_lambd
 
 
 def run_platon_classifier(args):
-
+    """
+        Run Platon classifier on unicycler short-read-only assembly.
+        :param args: argparse.Namespace object containing:
+            platon_db: path to platon database
+            threads: number of threads allowed to used
+            output_directory: path to output directory
+            force: force to run Platon even if output exists
+        :returns: path to Platon output directory
+    """
     if validate_tool("platon", PLATON_VERSION_SPEC):
         exit(1)
     
@@ -106,7 +135,16 @@ def run_platon_classifier(args):
         logger.error(f"Platon failed to finish. Please check its logs at {platon_path}/result.log")
     #    exit(-1)
     return platon_path
+
 def run_unicycler_sr_assembly(args):
+    """
+        Run unicycler assembly on short-reads
+        :param args: argparse.Namespace object containing: 
+            short_reads: list of paths to fastq files
+            output_directory: path to directory where output files will be stored
+            threads: number of threads to use
+        :return: path to directory containing assembly results
+    """
     #Check unicycler
     if validate_tool("unicycler", UNICYCLER_VERSION_SPEC):
         exit(1)
@@ -134,7 +172,19 @@ def run_unicycler_sr_assembly(args):
     if ret.returncode != 0:
         logger.error(f"Unicycler failed to finish. Please check its logs at {unicycler_sr_path}/unicycler.log")
         exit(-1)
+    return unicycler_sr_path
+
 def run_unicycler_lr_assembly(args, plasmid_files_list, it):
+    """
+        Run Unicycler for LR assembly
+        :param args: argparse.Namespace object containing: 
+            output_directory: path to directory where output files will be stored
+            threads: number of threads to use
+            short_reads: list of paths to short reads
+        :param plasmid_files_list: list of paths to plasmid files
+        :param it: iteration number
+        :return: path to assembly fasta file
+    """
     Unicycler_runner = "unicycler"
     #Check unicycler
     if validate_tool(Unicycler_runner, UNICYCLER_VERSION_SPEC):
@@ -197,6 +247,15 @@ def run_unicycler_lr_assembly(args, plasmid_files_list, it):
     return f"{unicycler_lr_path}/assembly.fasta"
 
 def run_minigraph_longreads_to_sr_assembly(args):
+    """
+        Run minigraph to assemble long reads into a single assembly
+        :param args: argparse.Namespace object containing:
+                output_directory: path to the output directory
+                short_reads: path to the short reads
+                threads: number of threads to use
+                force: whether to force the execution of the command
+        :return: str: path to the graph alignment file
+    """
     if validate_tool("minigraph", MINIGRAPH_VERSION_SPEC, version_split_lambda=lambda x:x):
         exit(1)
    
@@ -224,7 +283,18 @@ def run_minigraph_longreads_to_sr_assembly(args):
         logger.error(f"Minigraph failed to finish. Please check its logs at {args.output_directory}/minigraph.log")
         exit(-1)
     return graph_aligment_output_file
+
 def run_long_read_selection(args, prediction_path, graph_alignment_path):
+    """
+        Run long read selection
+        :param args: argparse.Namespace object containing:
+                output_directory: path to the output directory
+                force: rerun the tool even if results are already present
+                long_reads: path to the long reads
+        :param prediction_path: path to the plasmid classification results
+        :param graph_alignment_path: path to the graph alignment file
+        :return: tuple[str, str, str, str] paths to plasmid, unknown(neither plasmid or chr), unknown(both plasmid and chr) and unmapped reads.
+    """
     if validate_tool("split_plasmid_reads", SpecifierSet(">0"), version_cmd="", version_split_lambda=lambda x:"1"):
         exit(1)
     
@@ -264,6 +334,14 @@ def run_long_read_selection(args, prediction_path, graph_alignment_path):
     return plasmid_output, unknown_output_neit, unknown_output_both, unmapped_output
 
 def process_platon_output(args, platon_path, max_chr_rds=-7.9, min_plasmid_rds=0.7):
+    """
+        Process platon output and write plasmid and chromosome predicted contigs to a file
+        :param args: argparse.Namespace object (Not used)
+        :param platon_path: Path to the platon output (classification) directory
+        :param max_chr_rds: Maximum RDS value for a chromosome read to be considered as a chromosome. Default is -7.9.
+        :param min_plasmid_rds: Minimum RDS value for a plasmid read to be considered as a plasmid. Default is 0.7.
+        :return: Path to the predictions
+    """
     df = pd.read_csv(f"{platon_path}/result.tsv", sep="\t")
 
     chr_pos = df.RDS<=max_chr_rds
@@ -287,7 +365,17 @@ def process_platon_output(args, platon_path, max_chr_rds=-7.9, min_plasmid_rds=0
     return outpath
 
 def find_missing_long_reads(args, plasmid_files_list, unknown_files): #TODO Convert processes to unblocking
-    
+    """
+        Maps the unknown reads to the plasmid reads and recovers missed long reads
+        :param args: argparse.Namespace object containing:
+                output_directory: str path to the directory
+                force: run the script even if the output file exists
+                threads: number of threads to use with minimap2
+        :param plasmid_files_list: list of paths to the plasmid files. Starts with single one and each iteration of
+                find_missing_long_reads() and extract_missing_long_reads() adds one more plasmid file
+        :param unknown_files: lists of unkown reads including unmapped, both plasmid+chr, neither plasmid and chr
+        :return: Path to minimap2 output paf file path
+    """
     minimap_output_path = f"{args.output_directory}/prop_lr/lr.round.{len(plasmid_files_list)-1}.paf"
     if not args.force and os.path.isfile(minimap_output_path):
         logger.warning(f"{minimap_output_path} exists!. not running it again. Delete the files or use --force")
@@ -338,8 +426,19 @@ def find_missing_long_reads(args, plasmid_files_list, unknown_files): #TODO Conv
         logger.error(f"Minimap failed to finish. Please check its logs at {args.output_directory}/prop_lr/minimap2.log")
         exit(-1)
     return minimap_output_path
-def extract_missing_long_reads(args, plasmid_alignment, graph_alignment_path, prediction_tsv_path):
 
+def extract_missing_long_reads(args, plasmid_alignment, graph_alignment_path, prediction_tsv_path): #TODO optimize to only use unknown reads.
+    """
+        Extracts the missing long reads from the minimap2 alignment.
+        :param args: argparse.Namespace object containing:
+            output_directory: The path to the output directory.
+            long_reads: path to long reads.
+            force: If True, will overwrite the output file if it exists.
+        :param graph_alignment_path: path to the long read to short-read-assembly graph alignment.
+        :param plasmid_alignment: path to the minimap2 alignment of the plasmid reads to unknown reads
+        :param prediction_tsv_path: path to the platon prediction file.
+        :return Path to the extracted long reads fastq file
+    """
     extracted_lr_fastq = '.fastq.gz'.join(plasmid_alignment.rsplit('.paf', 1))
     if not args.force and os.path.isfile(extracted_lr_fastq):
         logger.warning(f"{extracted_lr_fastq} exists!. not running it again. Delete the files or use --force")
@@ -365,166 +464,13 @@ def extract_missing_long_reads(args, plasmid_alignment, graph_alignment_path, pr
         exit(ret.returncode)
     return extracted_lr_fastq
 
-def save_forgotten_short_read_only_circular_contigs(args):
-
-    #Step 1 Map Circular contigs in the short-read assembly to circular contigs in the long-read assembly.
-    unicycler_sr_path = f"{args.output_directory}/unicycler_sr/assembly.fasta"
-    
-
-    sr_tfw = tempfile.NamedTemporaryFile(delete=False)
-    for name, header, seq in generate_fasta(unicycler_sr_path):
-        if "circular" in header:
-            sr_tfw.write(f">{name} {header}\n{seq}\n".encode())
-    sr_tfw.close()
-
-    unicycler_lr_path = f"{args.output_directory}/unicycler_lr/assembly.fasta"
-    
-    lr_tfw = tempfile.NamedTemporaryFile(delete=False)
-    for name, header, seq in generate_fasta(unicycler_lr_path):
-        if "circular" in header:
-            lr_tfw.write(f">{name} {header}\n{seq}\n".encode())
-    lr_tfw.close()
-    minimap_output_path = f"{args.output_directory}/save_missed_contigs/src2lrc.paf" 
-
-    os.makedirs(f"{args.output_directory}/save_missed_contigs", exist_ok=True)
-    minimap2_cmd = [
-            "minimap2",
-            lr_tfw.name,
-            sr_tfw.name,
-            "-o", minimap_output_path,
-            "-t", str(args.threads)
-    ]
-    ret = subprocess.run(minimap2_cmd)
-    #Step 2 Find Skipped Contigs in the mapping file
-    
-    with open(minimap_output_path, 'r') as hand:
-        for line in hand:
-            line = line.rstrip().split("\t")
-            print(line)
-    os.unlink(sr_tfw.name)
-    os.unlink(lr_tfw.name)
-def save_forgotten_miniasm_only_circular_contigs(args, min_chromosomal_length=1_000_000, min_cov_ratio=.8, min_allowed_sr_coverage=.8):
-    #Step 1 Check if a circular miniasm unitig exists
-
-    import mappy as mp
-    miniasm_gfa_path = f"{args.output_directory}/unicycler_lr/miniasm_assembly/12_unitig_graph.gfa"
-    
-    if not os.path.isfile(miniasm_gfa_path):
-        return []
-    names = []
-    maseqs = []
-    links = []
-    for line in open(miniasm_gfa_path, 'r'):
-        if line[0] == "L":
-            line=line.rstrip().split("\t")
-            if line[1] == line[3]:
-                links.append(line[1])
-
-    for line in open(miniasm_gfa_path, 'r'):
-        if line[0] == "S":
-            line = line.split("\t")
-            if True:#line[1] in links:
-                maseqs.append(line[2])
-    #Step 2 Check if there is a incomplete of the same sequence in the unicycler output 
-    unicycler_lr_path = f"{args.output_directory}/unicycler_lr/assembly.fasta"
-    to_recover = []
-    uni_seqs = []
-    for n, h, s in generate_fasta(unicycler_lr_path):
-        if "circular" not in h:
-            continue
-        if len(s) > min_chromosomal_length:
-            continue
-
-        uni_seqs.append(s)
-
-    for seq in maseqs:
-        mapper = mp.Aligner(seq=seq+seq)
-        for s in uni_seqs:
-            maximal_mapping = -1
-            for alig in mapper.map(s):
-                if alig.mlen > maximal_mapping:
-                    maximal_mapping = alig.mlen
-            if maximal_mapping > min_cov_ratio * len(seq):
-                break
-        else:
-            #Uncovered
-
-            to_recover.append(seq)
-
-    #Step 3 Using the mappings break apart the unitig
-    if len(to_recover) == 0:
-        return []
-    unicycler_sr_gfa_path = f"{args.output_directory}/unicycler_sr/assembly.gfa"
-
-    tfw, tfw_name = tempfile.mkstemp()
-
-    with os.fdopen(tfw, 'w') as hand:
-        for i, seq in enumerate(to_recover):
-            print(f">{i}\n{seq}",file=hand)
-
-    minigraph_cmd = [
-        "minigraph",
-        unicycler_sr_gfa_path,
-        tfw_name,
-        "-t", str(args.threads),
-        "-x", "asm"
-    ]
-    ret = subprocess.run(minigraph_cmd, capture_output=True)
-    if ret.returncode != 0:
-        logger.error(f"minigraph failed to finish. Please check its logs at {platon_path}/result.log")
-        exit(1)
-    print(" ".join(minigraph_cmd))
-
-    sr_contigs = {}
-    with open(unicycler_sr_gfa_path) as hand: 
-        for line in hand:
-            if line[0] == "S":
-                line = line.rstrip().split("\t")
-                sr_contigs[line[1]] = line[2]
-
-#0       120417  5       120401  +       >33>95>484>74<230<119<71<283>63<368<48<484<95<53>283<661>381>523>321>668<216<248>228<664>291<694<383<206<164>685>395<123>632>119>173<179>57>93>117<93<69>217>67<417>62>217>553<417>33   171147  39974       160988  115301  121107  60      tp:A:P  cm:i:17636      s1:i:113914     s2:i:0  dv:f:0.0114
-    maximal_mappings = np.zeros(len(to_recover))
-    aligs = {}
-    output =  ret.stdout.decode().rstrip()
-    if output:
-        print(output)
-        for line in output.split("\n"):
-            line = line.rstrip().split("\t")
-            cid = int(line[0])
-            _s = int(line[2])
-            _e = int(line[3])
-            _l = int(line[1])
-            if (_e - _s) / _l > maximal_mappings[cid]:
-                maximal_mappings[cid] = (_e - _s) / _l
-                aligs[cid] = line
-    else:
-        os.unlink(tfw_name)
-        return []
-    #Step 4 Replace parts of the unitig with unicycler sr contigs
-
-    recovered = []
-    for i,m in enumerate(maximal_mappings):
-        if m > min_allowed_sr_coverage:
-            new_seq = ""
-            contigs = re.findall("[<,>][0-9]+", aligs[i][5])
-            if len(contigs) < 2 or contigs[0][1:] != contigs[-1][1:]:
-                continue
-            for octg in  contigs:
-                orient = octg[0]
-                ctg = octg[1:]
-                if orient == ">":
-                    new_seq = new_seq + sr_contigs[ctg]
-                elif orient == "<":
-                    new_seq = new_seq + mp.revcomp(sr_contigs[ctg])
-            _s = int(aligs[i][7])
-            _e = int(aligs[i][8])
-            recovered.append(new_seq[_s:_e])
-    
-    os.unlink(tfw_name)
-
-    return recovered
 
 def fix_gfa_empty_segments(gfa_path, out_path):
+    """
+        Fixes gfa files with empty segments
+        :param gfa_path: gfa file path
+        :param out_path: output path
+    """
     empty_segments = set()
     incoming = defaultdict(list)
     outgoing = defaultdict(list)
@@ -625,7 +571,6 @@ def main():
                 print(f">{n} {h}\n{s}", file=hand)
     
     for i in range(args.propagate_rounds):
-
         plasmid_alignment = find_missing_long_reads(args, plasmid_files, [unmapped_reads_file, unknown_reads_file_both, unknown_reads_file_neither])
         #plasmid_alignment = find_missing_long_reads(args, args.long_reads, plasmid_files)
         if line_count(plasmid_alignment) == 0:
@@ -646,13 +591,7 @@ def main():
             for n, h, s in generate_fasta(lr_assembly_path):
                 if "circular" in h:
                     print(f">{n} {h}\n{s}", file=hand)
-        
-
-        #for i,seq in enumerate(save_forgotten_miniasm_only_circular_contigs(args)):
-        #    print(f">l_{i} circular=True\n{seq}", file=hand)
     
-    #save_forgotten_short_read_only_circular_contigs(args)
-
     return 0
 
 if __name__ == "__main__":
