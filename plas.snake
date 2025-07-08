@@ -7,7 +7,9 @@ if len(config) == 0:
     configfile: 'config.yaml'
 
 
+
 refdir  = "/groups/hachgrp/projects/dev-plasmids/raw-data/ncbi-reference-genomes/eskapee/plasmids"
+amira_path  = "/groups/hachgrp/projects/dev-plasmids/analysis/cedar-lr-files"
 outpath = config['outpath']
 rawdata = config['rawdata']
 firstN = -1 if "firstN" not in config else config["firstN"]
@@ -72,7 +74,8 @@ def load_from_tsv(tsv_file):
         if 'ILLUMINA' not in p2a:
             #print(f"{nom} doesn't have ILLUMINA accession")
             continue
-
+#        if not os.path.isfile(f"{amira_path}/{nom}.amira.gfa"):
+#            continue
         if not os.path.isfile(f"{rawdata}/ILLUMINA/{nom}/{p2a['ILLUMINA']}_2.fastq.gz"):
             continue
         if not os.path.isfile(f"{refdir}/{nom}.fasta"):
@@ -116,8 +119,9 @@ plasmid_classifier="plasgraph2"
 
 rule all:
     input:
-        expand(f"{outpath}/{{sample}}/single_script_from_gfa/assembly.final.fasta", sample=config["samples"]),
-        #expand(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/lra-{{lra}}/assembly.circular.fasta", sample=config["samples"], sra=config["sra"], lra=config["lra"], pcc=config["pcc"]),
+        #        expand(f"{outpath}/{{sample}}/from_amira/assembly.final.fasta", sample=config["samples"]),
+        #expand(f"{outpath}/{{sample}}/hyplass_u{{it}}/assembly.final.fasta", sample=config["samples"], it=[0,1,2]),
+        expand(f"{outpath}/{{sample}}/hyplass_a/assembly.final.it{{it}}.fasta", sample=config["samples"], it=[0,1,2]),
         #expand(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/lra-{{lra}}/final_gc.circular.fasta", sample=config["samples"], sra=config["sra"], lra=config["lra"], pcc=config["pcc"]),
 
 rule all_assembly_qc:
@@ -150,22 +154,53 @@ rule all_stats:
         #expand(f"{outpath}/{{sample}}/qc/toplasmids.coverage.tsv",sample=config["samples"]),
         #expand(f"{outpath}/{{sample}}/plassembler{{flye}}-qc/toplasmids.coverage.tsv",sample=config["samples"], flye=["","_flye"]),
 
-rule unnamed_assembler_from_existing_assembly:
+rule gfatools_unitigs:
     input:
-        binary = "src/unnamed_plasmid_assembler.py",
-        lr = f"{outpath}/{{sample}}/qc/trim.lr.fastq.gz",
-        gfa = f"{outpath}/{{sample}}/sra-unicycler/assemble/assembly.gfa",
+        "{sample}.gfa"
     output:
-        dir=directory(f"{outpath}/{{sample}}/single_script_from_gfa/"),
-        fa=f"{outpath}/{{sample}}/single_script_from_gfa/assembly.final.fasta",
+        "{sample}.unitigs.gfa"
+    shell:
+        "gfatools asm -u {input}  > {output}"
+
+rule replace_unitig_names_with_numbers:
+    input:
+        "{sample}.unitigs.gfa"
+    output:
+        "{sample}.nunitigs.gfa"
+    run:
+        with open(input[0], 'r') as rh, open(output[0], 'w') as wh:
+            utg_idx = {}
+            idx     = 1
+            for line in rh:
+                if line[0] == "S":
+                    line = line.rstrip().split("\t")
+                    utg_idx[line[1]] = idx
+                    line[1] = f"{idx}"
+                    idx+=1
+                    print("\t".join(line), file=wh)
+                elif line[0] == "L":
+                    line = line.rstrip().split("\t")
+                    line[1] = str(utg_idx[line[1]])
+                    line[3] = str(utg_idx[line[3]])
+                    print("\t".join(line), file=wh)
+                    
+
+rule unnamed_assembler_from_amira:
+    input:
+        binary = "src/main.py",
+        lr = f"{outpath}/{{sample}}/qc/trim.lr.fastq.gz",
+        gfa = f"{amira_path}/{{sample}}.amira.nunitigs.gfa",
+    output:
+        dir=directory(f"{outpath}/{{sample}}/from_amira/"),
+        fa=f"{outpath}/{{sample}}/from_amira/assembly.final.fasta",
     threads:
-        64
+        32
     params:
         iter=1,
         db="../../annotation/db"
     resources:
         runtime=lambda wc, attempt: attempt * 6 * 60 - 1,
-        mem_mb=1024*700, 
+        mem_mb=1024*250, 
     shell:
         "python {input.binary}"
         " -l {input.lr}"
@@ -175,30 +210,62 @@ rule unnamed_assembler_from_existing_assembly:
         " -t {threads}"
         " --sr-assembly {input.gfa}"
         " --force"
+
+rule unnamed_assembler_from_existing_assembly:
+    input:
+        binary = "src/main.py",
+        lr = f"{outpath}/{{sample}}/qc/trim.lr.fastq.gz",
+        gfa = f"{outpath}/{{sample}}/sra-unicycler/assemble/002_depth_filter.gfa",
+#        gfa = f"{outpath}/{{sample}}/sra-unicycler/assemble/assembly.gfa",
+    output:
+        dir=directory(f"{outpath}/{{sample}}/hyplass_cont_u{{it}}/"),
+        fa=f"{outpath}/{{sample}}/hyplass_cont_u{{it}}/assembly.final.fasta",
+    threads:
+        16
+    benchmark:
+        f"{outpath}/benchmarks/{{sample}}.hyplass_from_assembly_i{{it}}.benchmark.txt"
+    params:
+        iter=lambda wildcards: wildcards.it,
+        db="../../annotation/db"
+    resources:
+        runtime=lambda wc, attempt: attempt * 6 * 60 - 1,
+        mem_mb=1024*120, 
+    shell:
+        "python {input.binary}"
+        " -l {input.lr}"
+        " -o {output.dir}"
+        " --platon-db {params.db}"
+        " -p {params.iter}"
+        " -t {threads}"
+        " --sr-assembly {input.gfa}"
+        " --force"
+
 rule unnamed_assembler:
     input:
+        src = "src/main.py",
         lr = f"{outpath}/{{sample}}/qc/trim.lr.fastq.gz",
         sr = [f"{outpath}/{{sample}}/qc/{{sample}}.sr1.fastq.gz",
 f"{outpath}/{{sample}}/qc/{{sample}}.sr2.fastq.gz"],
     output:
-        dir=directory(f"{outpath}/{{sample}}/single_script/"),
-        fa=f"{outpath}/{{sample}}/single_script/assembly.final.fasta",
+        dir=directory(f"{outpath}/{{sample}}/hyplass_a/"),
+        fa=[f"{outpath}/{{sample}}/hyplass_a/assembly.final.it{it}.fasta" for it in range(3)],
     threads:
-        64
+        32
     params:
-        iter=1,
+        iter=2,
         db="../../annotation/db"
     resources:
-        runtime=lambda wc, attempt: attempt * 6 * 60 - 1,
-        mem_mb=1024*700, 
+        runtime=lambda wc, attempt: attempt * 24 * 60 - 1,
+        mem_mb=1024*88, 
     shell:
-        "python src/unnamed_plasmid_assembler.py"
+        "python {input.src}"
         " -l {input.lr}"
         " -o {output.dir}"
         " --platon-db {params.db}"
         " -p {params.iter}"
         " -t {threads}"
         " -s {input.sr}"
+        " --force"
 
 """
 rule find_circular_plasmids:

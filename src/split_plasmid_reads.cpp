@@ -288,9 +288,9 @@ int process_gaf(int argc, char **argv) {
 //    gzFile plasmid_out = gzopen(argv[4], "w");
 
     FILE *plasmid_out = popen((string{"gzip - > "} + string{argv[4]}).c_str(), "w");
-
-    FILE *unknown_out = popen((string{"gzip - > "} + string{argv[6]}).c_str(), "w");
-    FILE *unmapped_out = popen((string{"gzip - > "} + string{argv[7]}).c_str(), "w");
+    FILE *unknown_neither_out = popen((string{"gzip - > "} + string{argv[6]}).c_str(), "w");
+    FILE *unknown_both_out = popen((string{"gzip - > "} + string{argv[7]}).c_str(), "w");
+    FILE *unmapped_out = popen((string{"gzip - > "} + string{argv[8]}).c_str(), "w");
 
 
     FILE *chrmsm_out = NULL;
@@ -334,29 +334,28 @@ int process_gaf(int argc, char **argv) {
         bool from_plasmid = false;
         for (const gview v : g.contigs) {
             mmap_view vv{&gaf_mmap, v};
-
             if (plasmid_contigs.contains((string)vv)) {
-
                 if(plasmid_contigs[(string)vv] == ContigType::Chromosome){
                     from_chromosome = true;
-                    from_plasmid = false;
-                    break;
                 }
                 else if (plasmid_contigs[(string)vv] == ContigType::Plasmid){
-                    buffer_length = fprintf(plasmid_out, "@%s %s\n%s\n+\n%s\n", seq->name.s,
-                                        seq->comment.s, seq->seq.s, seq->qual.s);
-                    from_chromosome = false;
                     from_plasmid = true;
-                    break;
                 }
             }
         }
         if(!from_chromosome && !from_plasmid){
-            buffer_length = fprintf(unknown_out, "@%s %s\n%s\n+\n%s\n", seq->name.s,
+            buffer_length = fprintf(unknown_neither_out, "@%s %s\n%s\n+\n%s\n", seq->name.s,
                                 seq->comment.s, seq->seq.s, seq->qual.s);
-
         }
-        if(PRINT_CHROSOMAL && from_chromosome){
+        else if (from_chromosome && from_plasmid){
+            buffer_length = fprintf(unknown_both_out, "@%s %s\n%s\n+\n%s\n", seq->name.s,
+                                seq->comment.s, seq->seq.s, seq->qual.s);
+        }
+        else if (from_plasmid){
+            buffer_length = fprintf(plasmid_out, "@%s %s\n%s\n+\n%s\n", seq->name.s,
+                                seq->comment.s, seq->seq.s, seq->qual.s);
+        }
+        else if(PRINT_CHROSOMAL && from_chromosome){
             buffer_length = fprintf(chrmsm_out, "@%s %s\n%s\n+\n%s\n", seq->name.s,
                                 seq->comment.s, seq->seq.s, seq->qual.s);
 
@@ -368,10 +367,9 @@ int process_gaf(int argc, char **argv) {
     kseq_destroy(seq);
     gzclose(fastq_fp);
 
-
     pclose(plasmid_out);
-
-    pclose(unknown_out);
+    pclose(unknown_neither_out);
+    pclose(unknown_both_out);
     pclose(unmapped_out);
     if (PRINT_CHROSOMAL){
         pclose(chrmsm_out);

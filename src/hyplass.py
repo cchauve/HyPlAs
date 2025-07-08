@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 import re
 from collections import defaultdict
-
+import pathlib
 import pandas as pd
 import numpy as np 
 #TODO pull version specs back to minimum working versions
@@ -134,7 +134,7 @@ def run_unicycler_sr_assembly(args):
     if ret.returncode != 0:
         logger.error(f"Unicycler failed to finish. Please check its logs at {unicycler_sr_path}/unicycler.log")
         exit(-1)
-def run_unicycler_lr_assembly(args, plasmid_files_list):
+def run_unicycler_lr_assembly(args, plasmid_files_list, it):
     Unicycler_runner = "unicycler"
     #Check unicycler
     if validate_tool(Unicycler_runner, UNICYCLER_VERSION_SPEC):
@@ -147,7 +147,7 @@ def run_unicycler_lr_assembly(args, plasmid_files_list):
 
 
     unicycler_sr_path = f"{args.output_directory}/unicycler_sr"
-    unicycler_lr_path = f"{args.output_directory}/unicycler_lr"
+    unicycler_lr_path = f"{args.output_directory}/unicycler_lr_{it}"
 
     shutil.copytree(unicycler_sr_path, unicycler_lr_path, dirs_exist_ok=True) #TODO only copy required items
     os.unlink(f"{unicycler_lr_path}/assembly.fasta")
@@ -232,12 +232,13 @@ def run_long_read_selection(args, prediction_path, graph_alignment_path):
     os.makedirs(plasmid_long_reads_path, exist_ok=True)
 
     plasmid_output = f"{plasmid_long_reads_path}/plasmid.fastq.gz"
-    unknown_output = f"{plasmid_long_reads_path}/unknown.fastq.gz"
+    unknown_output_both = f"{plasmid_long_reads_path}/unknown_both.fastq.gz"
+    unknown_output_neit = f"{plasmid_long_reads_path}/unknown_neither.fastq.gz"
     unmapped_output = f"{plasmid_long_reads_path}/unmapped.fastq.gz"
 
     if not args.force and os.path.isfile(plasmid_output) and os.path.isfile(unknown_output):
         logger.warning(f"{plasmid_output} and {unknown_output} exists!. not running it again. Delete the files or use --force")
-        return plasmid_output, unknown_output
+        return plasmid_output, unknown_output, unmapped_output
 
 
 
@@ -249,7 +250,8 @@ def run_long_read_selection(args, prediction_path, graph_alignment_path):
             prediction_path,
             plasmid_output,
             "skip",
-            unknown_output,
+            unknown_output_neit,
+            unknown_output_both,
             unmapped_output,
     ]
     print(" ".join(split_plasmid_read_cmd), file=sys.stderr)
@@ -259,7 +261,7 @@ def run_long_read_selection(args, prediction_path, graph_alignment_path):
         logger.error(f"split_plasmid_reads failed to finish. Please check its logs at {args.output_directory}/split_plasmid_reads.log\nWas running {' '.join(split_plasmid_read_cmd)}")
         exit(-1)
 
-    return plasmid_output, unknown_output, unmapped_output
+    return plasmid_output, unknown_output_neit, unknown_output_both, unmapped_output
 
 def process_platon_output(args, platon_path, max_chr_rds=-7.9, min_plasmid_rds=0.7):
     df = pd.read_csv(f"{platon_path}/result.tsv", sep="\t")
@@ -600,42 +602,50 @@ def main():
     #If there are no alignments
     # Check the platon output to grab circularized sr plasmids
     # and terminate
-    final_assembly_path = f"{args.output_directory}/assembly.final.fasta"
+    final_assembly_path = f"{args.output_directory}/assembly.final.it{{}}.fasta"
 
-    plasmid_reads_file, unknown_reads_file, unmapped_reads_file = run_long_read_selection(args, prediction_tsv_path, graph_alignment_path)
+    plasmid_reads_file, unknown_reads_file_both, unknown_reads_file_neither, unmapped_reads_file = run_long_read_selection(args, prediction_tsv_path, graph_alignment_path)
     with open(plasmid_reads_file, "rb") as f:
         num_lines = sum(1 for _ in f)  
     if num_lines < 4:
         print("No plasmid long reads are found",file=sys.stderr)
         unicycler_fasta_path = f"{args.output_directory}/unicycler_sr/assembly.fasta"
-        with open(final_assembly_path, 'w') as hand:
+        with open(final_assembly_path.format(0), 'w') as hand:
             for n, h, s in generate_fasta(unicycler_fasta_path):
                 if "circular" in h:
                     print(f">{n} {h}\n{s}", file=hand)
-
+        for i in range(0,args.propagate_rounds):
+            pathlib.Path(final_assembly_path.format(i+1)).symlink_to(final_assembly_path.format(0))
         return 0
     plasmid_files = [plasmid_reads_file]
+    lr_assembly_path = run_unicycler_lr_assembly(args, plasmid_files, 0)
+    with open(final_assembly_path.format(0), 'w') as hand:
+        for n, h, s in generate_fasta(lr_assembly_path):
+            if "circular" in h:
+                print(f">{n} {h}\n{s}", file=hand)
+    
     for i in range(args.propagate_rounds):
 
-        plasmid_alignment = find_missing_long_reads(args, plasmid_files, [unmapped_reads_file, unknown_reads_file])
+        plasmid_alignment = find_missing_long_reads(args, plasmid_files, [unmapped_reads_file, unknown_reads_file_both, unknown_reads_file_neither])
         #plasmid_alignment = find_missing_long_reads(args, args.long_reads, plasmid_files)
         if line_count(plasmid_alignment) == 0:
+            for it in range(i, args.propagate_rounds):
+                pathlib.Path(final_assembly_path.format(it+1)).symlink_to(final_assembly_path.format(i))
             logger.info(f"{plasmid_alignment} has no alignments. Stopping the propagation!")
             break
         plasmid_reads_i = extract_missing_long_reads(args, plasmid_alignment, graph_alignment_path, prediction_tsv_path)
         if line_count(plasmid_reads_i) == 0:
+            for it in range(i, args.propagate_rounds):
+                pathlib.Path(final_assembly_path.format(it+1)).symlink_to(final_assembly_path.format(i))
             logger.info(f"{plasmid_reads_i} has no reads. Stopping the propagation!")
             break
         plasmid_files.append(plasmid_reads_i)
     
-    lr_assembly_path = run_unicycler_lr_assembly(args, plasmid_files)
-
-
-
-    with open(final_assembly_path, 'w') as hand:
-        for n, h, s in generate_fasta(lr_assembly_path):
-            if "circular" in h:
-                print(f">{n} {h}\n{s}", file=hand)
+        lr_assembly_path = run_unicycler_lr_assembly(args, plasmid_files, i+1)
+        with open(final_assembly_path.format(i+1), 'w') as hand:
+            for n, h, s in generate_fasta(lr_assembly_path):
+                if "circular" in h:
+                    print(f">{n} {h}\n{s}", file=hand)
         
 
         #for i,seq in enumerate(save_forgotten_miniasm_only_circular_contigs(args)):
