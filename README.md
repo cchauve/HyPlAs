@@ -1,6 +1,11 @@
 
-## Installation
+# HyPlas
+Hyplas is an automated plasmid discovery method works on short- long- hybrid sequencing data. 
+It incorporates plasmid classification tools (Such as platon) on short-read assembled contigs to aid plasmidic long-read selection and performs hybrid assembly.
 
+## Installation #TODO add setup.py
+
+### Bioconda #TODO
 ### Build hyplass binaries
 ```
 conda create -f environment.yml
@@ -8,7 +13,7 @@ conda activate hyplass-env
 make
 ```
 
-Or with virtualenv
+Or with virtualenv 
 ```
 source module_load.sh #For cedar. should be installed if not available
 python -m venv hyplass_env
@@ -16,7 +21,6 @@ source hyplass_env/bin/activate
 python3 build.py hyplass_env
 ```
 ## Usage
-
 ```
 python src/hyplass.py --platon-db db -s sr_*.fastq -l lr.fastq.gz -o hyplass-out/ -t threads -p prop_rounds      
 ```
@@ -31,7 +35,7 @@ rm db.tar.gz
 - -s space separated short read files
 - -l long reads file (required to be gzipped)
 - -o output folder
-- -p number of long read recovery rounds to be executed
+- -p number of long read recovery rounds to be executed (Recommend 2 rounds)
 
 ### Output explanation
 - assembly.final.fasta: 
