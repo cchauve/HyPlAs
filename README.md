@@ -20,6 +20,9 @@ python -m venv hyplass_env
 source hyplass_env/bin/activate
 python3 build.py hyplass_env
 ```
+
+
+## Graphical Abstract for the procedure #TODO
 ## Usage
 ```
 python src/hyplass.py --platon-db db -s sr_*.fastq -l lr.fastq.gz -o hyplass-out/ -t threads -p prop_rounds      
