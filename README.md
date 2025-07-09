@@ -33,7 +33,9 @@ the following steps (see figure below):
 	3.b. long reads are mapped to the assembly graph using minigraph [Li et al., 2020],  
    	3.c. long-read mapping to short-read contigs and platon results are used to select an initial set of putative plasmidic long reads,  
    	3.d. the set of putative plasmidic long reads is augmented by iteratively detecting overlapping long reads;  
-5. The full short-read assembly graph generated in step 2 is refined with the plasmidic long reads selected during step 3, using Unicycler. 
+5. The full short-read assembly graph generated in step 2 is refined with the plasmidic long reads selected during step 3, using Unicycler.
+
+<image src="HyPlAs_pipelin.pdf">
 
 ## Usage
 ```
