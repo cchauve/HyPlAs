@@ -70,7 +70,7 @@ HyPlAs creates in the output folder the following files and directories:
 - lr2assembly.gaf: Graph alignment of long reads to the short-read-only assembly cotigs;  
 - plasmid_long_reads/plasmid.fastq.gz: Long-reads classified as plasmidic by HyPlAs, in FASTQ format;  
 - prop_lr/ (directory):
-	- prop_lr/lr.round.[0-9]+.paf: Mappings of the known plasmid long-reads to unknown long-reads
-	- prop_lr/lr.round.[0-9]+.fastq.gz: Plasmidic long-read sequences recovered in this round
-- unicycler_lr (directory):
-	- Output of the hybrid assembly using predicted plasmdic long reads by Unicycler
+	- prop_lr/lr.round.[0-9]+.paf: Mappings of the known plasmid long-reads to unknown long-reads, the integer suffix indicates the iteration round of plasmidic long-reads augmentation (step 3.d),  
+	- prop_lr/lr.round.[0-9]+.fastq.gz: Plasmidic long-read sequences recovered in augmentation round X (X in [0-9]);  
+- unicycler_lr (directory):  
+	- Output of the final Unicycler hybrid assembly using the short-read--only assembly and the predicted plasmdic long reads.  
