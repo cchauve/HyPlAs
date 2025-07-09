@@ -548,7 +548,7 @@ def main():
     #If there are no alignments
     # Check the platon output to grab circularized sr plasmids
     # and terminate
-    final_assembly_path = f"{args.output_directory}/assembly.final.it{{}}.fasta"
+    final_assembly_path = f"{args.output_directory}/plasmids.final.it{{}}.fasta"
 
     plasmid_reads_file, unknown_reads_file_both, unknown_reads_file_neither, unmapped_reads_file = run_long_read_selection(args, prediction_tsv_path, graph_alignment_path)
     with open(plasmid_reads_file, "rb") as f:
