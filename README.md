@@ -35,7 +35,7 @@ the following steps (see figure below):
    	3.d. the set of putative plasmidic long reads is augmented by iteratively detecting overlapping long reads;  
 5. The full short-read assembly graph generated in step 2 is refined with the plasmidic long reads selected during step 3, using Unicycler.
 
-![HyPlAs](HyPlAs_pipeline.pdf "HyPlAs pipeline")
+![HyPlAs](HyPlAs_pipeline.pdf)
 
 ## Usage
 ```
