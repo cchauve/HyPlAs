@@ -1,7 +1,8 @@
 
 # HyPlas
-Hyplas is an automated plasmid discovery method works on short- long- hybrid sequencing data. 
-It incorporates plasmid classification tools (Such as platon) on short-read assembled contigs to aid plasmidic long-read selection and performs hybrid assembly.
+HyplAs is a tool aimed at assembling plasmids from hybid short-read and long-read sequencing data for bacerial isolates.
+HyPlAs main novlty is to incorporate a plasmid classification tools (Such as platon) on short-read assembled contigs to aid plasmidic long-read selection and performs hybrid plasmids assembly.
+HyPlAs has been desiged to work with single genome sequencing data, and has not been tested on metagenomics data.  
 
 ## Installation #TODO add setup.py
 
@@ -21,8 +22,19 @@ source hyplass_env/bin/activate
 python3 build.py hyplass_env
 ```
 
+## Methods Overview
 
-## Graphical Abstract for the procedure #TODO
+HyPlAs  is a pipeline combinig existing tools and specific Python scripts and C++ programs. HyPlAs is composed of
+the following steps (see figure below): 
+1. Reads preprocessing;  
+2. Short reads are assembled using Unicycler;
+3. The detection of putative plasmidic long reads is done in four stages:
+	3.a. the plasmid contigs classification tool Platon is used to detect plasmidic short-read contigs,
+	3.b. long reads are mapped to the assembly graph using minigraph [Li et al., 2020],
+   	3.c. long-read mapping to short-read contigs and platon results are used to select an initial set of putative plasmidic long reads,
+   	3.d. the set of putative plasmidic long reads is augmented by iteratively detecting overlapping long reads;
+4. The full short-read assembly graph generated in step 2 is refined with the plasmidic long reads selected during step 3, using Unicycler. 
+
 ## Usage
 ```
 python src/hyplass.py --platon-db db -s sr_*.fastq -l lr.fastq.gz -o hyplass-out/ -t threads -p prop_rounds      
