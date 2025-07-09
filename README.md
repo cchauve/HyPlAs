@@ -41,7 +41,7 @@ the following steps (see figure below):
 
 ## Usage
 ```
-python src/hyplass.py --platon-db db -s sr_*.fastq -l lr.fastq.gz -o hyplass-out/ -t threads -p prop_rounds      
+python src/hyplas.py --platon-db db -s sr_*.fastq -l lr.fastq.gz -o hyplass-out/ -t threads -p prop_rounds      
 ```
 ### Input
  - --platon-db: Database used by Platon (<a href="https://zenodo.org/record/4066768/files/db.tar.gz">https://zenodo.org/record/4066768/files/db.tar.gz</a>)
