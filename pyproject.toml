@@ -1,0 +1,22 @@
+
+[project]
+name = "HyPlAs"
+version = "0.0.1"
+authors = [
+  { name="Fatih Karaoglanoglu", email="f0t1h@gmail.com" },
+  { name="Cedric Chauve", email="cchauvec@sfu.ca" },
+]
+description = "Hybrid long- short- plasmid assembly"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: MacOS",
+    "Operating System :: Unix"
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+
+[project.urls]
+Homepage = "https://github.com/f0t1h/HyPlAs"
+Issues = "https://github.com/f0t1h/HyPlAs/issues"

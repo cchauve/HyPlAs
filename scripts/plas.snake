@@ -10,7 +10,7 @@ if len(config) == 0:
 
 refdir  = "/groups/hachgrp/projects/dev-plasmids/raw-data/ncbi-reference-genomes/eskapee/plasmids"
 amira_path  = "/groups/hachgrp/projects/dev-plasmids/analysis/cedar-lr-files"
-outpath = config['outpath']
+outpath = config['outpathf']
 rawdata = config['rawdata']
 firstN = -1 if "firstN" not in config else config["firstN"]
 PLASMID_SAVE_ITER = 2
@@ -188,7 +188,7 @@ rule replace_unitig_names_with_numbers:
 
 rule unnamed_assembler_from_amira:
     input:
-        binary = "src/main.py",
+        binary = "../src/main.py",
         lr = f"{outpath}/{{sample}}/qc/trim.lr.fastq.gz",
         gfa = f"{amira_path}/{{sample}}.amira.nunitigs.gfa",
     output:
@@ -214,7 +214,7 @@ rule unnamed_assembler_from_amira:
 
 rule unnamed_assembler_from_existing_assembly:
     input:
-        binary = "src/main.py",
+        binary = "../src/main.py",
         lr = f"{outpath}/{{sample}}/qc/trim.lr.fastq.gz",
         gfa = f"{outpath}/{{sample}}/sra-unicycler/assemble/002_depth_filter.gfa",
 #        gfa = f"{outpath}/{{sample}}/sra-unicycler/assemble/assembly.gfa",
@@ -243,7 +243,7 @@ rule unnamed_assembler_from_existing_assembly:
 
 rule unnamed_assembler:
     input:
-        src = "src/main.py",
+        src = "../src/main.py",
         lr = f"{outpath}/{{sample}}/qc/trim.lr.fastq.gz",
         sr = [f"{outpath}/{{sample}}/qc/{{sample}}.sr1.fastq.gz",
 f"{outpath}/{{sample}}/qc/{{sample}}.sr2.fastq.gz"],
@@ -431,7 +431,7 @@ rule make_final_gfa:
     output:
         gfa = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/lra-{{lra}}/final.gfa",
     shell:
-        "python src/collect_gfa.py"
+        "python ../src/collect_gfa.py"
         " {input.gfa}"
         " {input.fasta}"
         " {input.sr_gfa}"
@@ -508,7 +508,7 @@ rule extract_missing_long_reads:
     output:
         lr = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.{{iter}}.fastq.gz",
     shell:
-        "./src/select_missing_reads"
+        "./../src/select_missing_reads"
         " {input.paf}"
         " {input.gaf}"
         " {input.lr}"
@@ -886,7 +886,7 @@ rule assemble_selected_reads_with_magpie_GT:
         mem_mb="256G",
     shell:
         "python3"
-        " src/magpie.py"
+        " ../src/magpie.py"
         " --threads {threads}"
         " {params.lr_assembler}"
         " {input.lr_plasmid}"
@@ -910,7 +910,7 @@ rule assemble_selected_reads_with_magpie:
         mem_mb="256G",
     shell:
         "python3"
-        " src/magpie.py"
+        " ../src/magpie.py"
         " --threads {threads}"
         " {params.lr_assembler}"
         " {input.lr_plasmid}"
@@ -931,7 +931,7 @@ rule recover_sr_only_all:
         mem_mb="16G",
     shell:
         "python3"
-        " src/recover_sr.py"
+        " ../src/recover_sr.py"
         " --threads {threads}"
         " -T {input.platon_tsv}"
         " -G {input.sr_gfa}"
@@ -952,7 +952,7 @@ rule recover_sr_only_predicted:
         mem_mb="16G",
     shell:
         "python3"
-        " src/recover_sr.py"
+        " ../src/recover_sr.py"
         " --threads {threads}"
         " -T {input.tsv}"
         " -G {input.gfa}"
@@ -1078,7 +1078,7 @@ rule split_reads_plasmid_chr:
     threads:
         4
     shell:
-        "./src/split_plasmid_reads"
+        "./../src/split_plasmid_reads"
         " {input.gaf}"
         " {input.lr}"
         " {input.tsv}"
@@ -1113,7 +1113,7 @@ rule samtoolscoverageforgt:
 
 rule minimapPlassembler2GT:
     input:
-        filter_bin = "src/filter_plasmid_sam.py", 
+        filter_bin = "../src/filter_plasmid_sam.py", 
         ref= f"{refdir}/{{sample}}.fasta",
         ctgs = f"{outpath}/{{sample}}/plassembler{{is_flye}}/plasmid_fastqs/plasmids_long.fastq",
     output:
@@ -1134,7 +1134,7 @@ rule minimapPlassembler2GT:
         " && samtools sort {output.samf} -@ 8 -o {output.bam}"
 rule minimapAll2GT:
     input:
-        filter_bin = "src/filter_plasmid_sam.py", 
+        filter_bin = "../src/filter_plasmid_sam.py", 
         ref= f"{refdir}/{{sample}}.fasta",
         ctgs = f"{outpath}/{{sample}}/qc/trim.lr.fastq.gz",
     output:
@@ -1154,7 +1154,7 @@ rule minimapAll2GT:
         " && samtools sort {output.samf} -@ 8 -o {output.bam}"
 rule minimapSRCTG2GT:
     input:
-        filter_bin = "src/filter_plasmid_sam.py", 
+        filter_bin = "../src/filter_plasmid_sam.py", 
         ref=f"{refdir}/{{sample}}.fasta",
         ctgs = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/classify/result.plasmid.fasta",
     output:
@@ -1173,7 +1173,7 @@ rule minimapSRCTG2GT:
 
 rule minimap2GT_plus_unknown:
     input:
-        filter_bin = "src/filter_plasmid_sam.py", 
+        filter_bin = "../src/filter_plasmid_sam.py", 
         ref=f"{refdir}/{{sample}}.fasta",
         lr_plasmid = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.fastq.gz",
         lr_plasmid2 = lambda w: [f"{outpath}/{w.sample}/sra-{w.sra}/pcc-{w.pcc}/select-lr/plasmid.{i}.fastq.gz" for i in range(int(w.iter))],
@@ -1202,7 +1202,7 @@ def get_extension_lrs(wc):
     return [fmt.format(str(i)) for i in range(int(wc.iter)) if os.path.isfile( fmt.format(str(i))) ]
 rule minimap2GT_single_script:
     input:
-        filter_bin = "src/filter_plasmid_sam.py", 
+        filter_bin = "../src/filter_plasmid_sam.py", 
         ref=f"{refdir}/{{sample}}.fasta",
         lr_plasmid = f"{outpath}/{{sample}}/hyplass_b/plasmid_long_reads/plasmid.fastq.gz",
         #lr_plasmid2 = lambda w:[f"{outpath}/{w.sample}/hyplass_b/prop_lr/lr.round.{i}.fastq.gz" for i in range(int(w.iter))],
@@ -1229,7 +1229,7 @@ rule minimap2GT_single_script:
 
 rule minimap2GT:
     input:
-        filter_bin = "src/filter_plasmid_sam.py", 
+        filter_bin = "../src/filter_plasmid_sam.py", 
         ref=f"{refdir}/{{sample}}.fasta",
         lr_plasmid = f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/select-lr/plasmid.fastq.gz",
         lr_plasmid2 = lambda w:[f"{outpath}/{w.sample}/sra-{w.sra}/pcc-{w.pcc}/select-lr/plasmid.{i}.fastq.gz" for i in range(int(w.iter))],
