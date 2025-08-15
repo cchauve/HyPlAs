@@ -121,8 +121,9 @@ rule all:
     input:
         #        expand(f"{outpath}/{{sample}}/from_amira/assembly.final.fasta", sample=config["samples"]),
         #expand(f"{outpath}/{{sample}}/hyplass_u{{it}}/assembly.final.fasta", sample=config["samples"], it=[0,1,2]),
-        expand(f"{outpath}/{{sample}}/hyplass_a/assembly.final.it{{it}}.fasta", sample=config["samples"], it=[0,1,2]),
+        #expand(f"{outpath}/{{sample}}/hyplass_b/assembly.final.it{{it}}.fasta", sample=config["samples"], it=[0,1,2]),
         #expand(f"{outpath}/{{sample}}/sra-{{sra}}/pcc-{{pcc}}/lra-{{lra}}/final_gc.circular.fasta", sample=config["samples"], sra=config["sra"], lra=config["lra"], pcc=config["pcc"]),
+        expand(f"{outpath}/{{sample}}/hyplass_b_cov/plasmid_selected_i{{iter}}.coverage.tsv", sample=config["samples"], iter=[0,1,2]),
 
 rule all_assembly_qc:
     input:
@@ -218,8 +219,8 @@ rule unnamed_assembler_from_existing_assembly:
         gfa = f"{outpath}/{{sample}}/sra-unicycler/assemble/002_depth_filter.gfa",
 #        gfa = f"{outpath}/{{sample}}/sra-unicycler/assemble/assembly.gfa",
     output:
-        dir=directory(f"{outpath}/{{sample}}/hyplass_cont_u{{it}}/"),
-        fa=f"{outpath}/{{sample}}/hyplass_cont_u{{it}}/assembly.final.fasta",
+        dir=directory(f"{outpath}/{{sample}}/hyplass_bont_u{{it}}/"),
+        fa=f"{outpath}/{{sample}}/hyplass_bont_u{{it}}/assembly.final.fasta",
     threads:
         16
     benchmark:
@@ -247,15 +248,17 @@ rule unnamed_assembler:
         sr = [f"{outpath}/{{sample}}/qc/{{sample}}.sr1.fastq.gz",
 f"{outpath}/{{sample}}/qc/{{sample}}.sr2.fastq.gz"],
     output:
-        dir=directory(f"{outpath}/{{sample}}/hyplass_a/"),
-        fa=[f"{outpath}/{{sample}}/hyplass_a/assembly.final.it{it}.fasta" for it in range(3)],
+        dir=directory(f"{outpath}/{{sample}}/hyplass_b/"),
+     #   plasmid_base =f"{outpath}/{{sample}}/hyplass_b/plasmid_long_reads/plasmid.fastq.gz",
+     #   plasmid_extension =[f"{outpath}/{{sample}}/hyplass_b/prop_lr/lr.round.{it}.fastq.gz" for it in range(2)],
+        fa=[f"{outpath}/{{sample}}/hyplass_b/assembly.final.it{it}.fasta" for it in range(3)],
     threads:
         32
     params:
         iter=2,
         db="../../annotation/db"
     resources:
-        runtime=lambda wc, attempt: attempt * 24 * 60 - 1,
+        runtime=lambda wc, attempt: attempt * 6 * 60 - 1,
         mem_mb=1024*88, 
     shell:
         "python {input.src}"
@@ -1192,6 +1195,38 @@ rule minimap2GT_plus_unknown:
         " -a -o {output.sam}"
         " && python {input.filter_bin} {output.sam} {output.samf}"
         " && samtools sort {output.samf} -@ 8 -o {output.bam} && echo done"
+
+from glob import glob
+def get_extension_lrs(wc):
+    fmt =f"{outpath}/{wc.sample}/hyplass_b/prop_lr/lr.round.{{}}.fastq.gz" 
+    return [fmt.format(str(i)) for i in range(int(wc.iter)) if os.path.isfile( fmt.format(str(i))) ]
+rule minimap2GT_single_script:
+    input:
+        filter_bin = "src/filter_plasmid_sam.py", 
+        ref=f"{refdir}/{{sample}}.fasta",
+        lr_plasmid = f"{outpath}/{{sample}}/hyplass_b/plasmid_long_reads/plasmid.fastq.gz",
+        #lr_plasmid2 = lambda w:[f"{outpath}/{w.sample}/hyplass_b/prop_lr/lr.round.{i}.fastq.gz" for i in range(int(w.iter))],
+        dir=directory(f"{outpath}/{{sample}}/hyplass_b/"),
+    output:
+        sam=temp(f"{outpath}/{{sample}}/hyplass_b_cov/plasmid_selected_i{{iter}}.sam"),
+        samf=temp(f"{outpath}/{{sample}}/hyplass_b_cov/plasmid_selected_i{{iter}}_filtered.sam"),
+        bam=f"{outpath}/{{sample}}/hyplass_b_cov/plasmid_selected_i{{iter}}.bam",
+    threads:
+        32
+    params:
+        extension=get_extension_lrs
+    shell:
+        "minimap2"
+        " {input.ref}"
+        " {input.lr_plasmid}"
+        " {params.extension}"
+        " -t {threads}"
+        " -x map-ont"
+        " -a -o {output.sam}"
+        " && python {input.filter_bin} {output.sam} {output.samf}"
+        " && samtools sort {output.samf} -@ 8 -o {output.bam}"
+
+
 rule minimap2GT:
     input:
         filter_bin = "src/filter_plasmid_sam.py", 

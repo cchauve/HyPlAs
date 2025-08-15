@@ -332,7 +332,7 @@ int process_gaf(int argc, char **argv) {
             reads2use[(string)vv] = 1;
         }
     }
-
+/*
     for (PafEntry g{gaf_view}; !g.isterm; g = PafEntry{gaf_view}) {
         mmap_view gid {&gaf_mmap, g.id};
 
@@ -347,7 +347,7 @@ int process_gaf(int argc, char **argv) {
             }
         }
     }
-
+*/
 
     while (kseq_read(seq) >= 0){
 

@@ -306,9 +306,9 @@ def run_long_read_selection(args, prediction_path, graph_alignment_path):
     unknown_output_neit = f"{plasmid_long_reads_path}/unknown_neither.fastq.gz"
     unmapped_output = f"{plasmid_long_reads_path}/unmapped.fastq.gz"
 
-    if not args.force and os.path.isfile(plasmid_output) and os.path.isfile(unknown_output):
-        logger.warning(f"{plasmid_output} and {unknown_output} exists!. not running it again. Delete the files or use --force")
-        return plasmid_output, unknown_output, unmapped_output
+    if not args.force and os.path.isfile(plasmid_output) and os.path.isfile(unknown_output_both):
+        logger.warning(f"{plasmid_output} and {unknown_output_both} exists!. not running it again. Delete the files or use --force")
+        return plasmid_output, unknown_output_both, unknown_output_neit, unmapped_output
 
 
 
@@ -427,7 +427,7 @@ def find_missing_long_reads(args, plasmid_files_list, unknown_files): #TODO Conv
         exit(-1)
     return minimap_output_path
 
-def extract_missing_long_reads(args, plasmid_alignment, graph_alignment_path, prediction_tsv_path): #TODO optimize to only use unknown reads.
+def extract_missing_long_reads(args, plasmid_alignment, graph_alignment_path, prediction_tsv_path, unknown_reads): #TODO optimize to only use unknown reads.
     """
         Extracts the missing long reads from the minimap2 alignment.
         :param args: argparse.Namespace object containing:
@@ -445,13 +445,21 @@ def extract_missing_long_reads(args, plasmid_alignment, graph_alignment_path, pr
         return extracted_lr_fastq
     if validate_tool("select_missing_reads", SpecifierSet(">0"), version_cmd="", version_split_lambda=lambda x:"1"):
         exit(1)
+    
 
+    cat_reads_cmd = [
+        "zcat",
+        *unknown_reads
+    ]
 
+    tfw = tempfile.NamedTemporaryFile(delete=False)
+    ret = subprocess.run(cat_reads_cmd, stdout = tfw, stderr=sys.stderr)
+    tfw.close()
     smr_cmd = [
-            "select_missing_reads",
+            "select_missing_reads_nofilter",
             plasmid_alignment,
             graph_alignment_path,
-            args.long_reads,
+            tfw.name,
             extracted_lr_fastq,
             prediction_tsv_path
     ]
@@ -578,7 +586,7 @@ def main():
                 pathlib.Path(final_assembly_path.format(it+1)).symlink_to(final_assembly_path.format(i))
             logger.info(f"{plasmid_alignment} has no alignments. Stopping the propagation!")
             break
-        plasmid_reads_i = extract_missing_long_reads(args, plasmid_alignment, graph_alignment_path, prediction_tsv_path)
+        plasmid_reads_i = extract_missing_long_reads(args, plasmid_alignment, graph_alignment_path, prediction_tsv_path, [unknown_reads_file_both, unknown_reads_file_neither, unmapped_reads_file])
         if line_count(plasmid_reads_i) == 0:
             for it in range(i, args.propagate_rounds):
                 pathlib.Path(final_assembly_path.format(it+1)).symlink_to(final_assembly_path.format(i))

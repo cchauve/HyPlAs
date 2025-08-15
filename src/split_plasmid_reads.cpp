@@ -330,36 +330,34 @@ int process_gaf(int argc, char **argv) {
             }
         }
 
-        bool from_chromosome = false;
-        bool from_plasmid = false;
+        int from_chromosome = 0;
+        int from_plasmid = 0;
         for (const gview v : g.contigs) {
             mmap_view vv{&gaf_mmap, v};
             if (plasmid_contigs.contains((string)vv)) {
                 if(plasmid_contigs[(string)vv] == ContigType::Chromosome){
-                    from_chromosome = true;
+                    from_chromosome++;
                 }
                 else if (plasmid_contigs[(string)vv] == ContigType::Plasmid){
-                    from_plasmid = true;
+                    from_plasmid++;
                 }
             }
         }
-        if(!from_chromosome && !from_plasmid){
+        if(from_chromosome==0 && from_plasmid==0){
             buffer_length = fprintf(unknown_neither_out, "@%s %s\n%s\n+\n%s\n", seq->name.s,
                                 seq->comment.s, seq->seq.s, seq->qual.s);
         }
-        else if (from_chromosome && from_plasmid){
-            buffer_length = fprintf(unknown_both_out, "@%s %s\n%s\n+\n%s\n", seq->name.s,
-                                seq->comment.s, seq->seq.s, seq->qual.s);
-        }
-        else if (from_plasmid){
+        else if (from_plasmid>0 && from_chromosome==0){
             buffer_length = fprintf(plasmid_out, "@%s %s\n%s\n+\n%s\n", seq->name.s,
                                 seq->comment.s, seq->seq.s, seq->qual.s);
         }
-        else if(PRINT_CHROSOMAL && from_chromosome){
+        else if (from_chromosome > 0 && from_plasmid > 0 ){
+            buffer_length = fprintf(unknown_both_out, "@%s %s\n%s\n+\n%s\n", seq->name.s,
+                                seq->comment.s, seq->seq.s, seq->qual.s);
+        }
+        else if(PRINT_CHROSOMAL && from_chromosome>0){
             buffer_length = fprintf(chrmsm_out, "@%s %s\n%s\n+\n%s\n", seq->name.s,
                                 seq->comment.s, seq->seq.s, seq->qual.s);
-
-
         }
 
     }
