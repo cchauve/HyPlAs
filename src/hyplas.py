@@ -146,7 +146,7 @@ def run_unicycler_sr_assembly(args):
         :return: path to directory containing assembly results
     """
     #Check unicycler
-    if validate_tool("unicycler", UNICYCLER_VERSION_SPEC):
+    if validate_tool("unicycler_hyplas_modified", UNICYCLER_VERSION_SPEC):
         exit(1)
     #Check files
     for file in args.short_reads:
@@ -156,7 +156,7 @@ def run_unicycler_sr_assembly(args):
     unicycler_sr_path = f"{args.output_directory}/unicycler_sr"
     os.makedirs(unicycler_sr_path, exist_ok=True)
     unicycler_cmd = [
-            "unicycler",
+            "unicycler_hyplas_modified",
             "-o", unicycler_sr_path, 
             "-t", str(args.threads),
             #"--kmers", "51",
@@ -185,7 +185,7 @@ def run_unicycler_lr_assembly(args, plasmid_files_list, it):
         :param it: iteration number
         :return: path to assembly fasta file
     """
-    Unicycler_runner = "unicycler"
+    Unicycler_runner = "unicycler_hyplas_modified"
     #Check unicycler
     if validate_tool(Unicycler_runner, UNICYCLER_VERSION_SPEC):
         exit(1)
@@ -536,7 +536,7 @@ def main():
         shutil.copyfile(args.sr_assembly, _gfa_path)
         #fix_gfa_empty_segments(unicycler_sr_path, _gfa_path)
 #        shutil.copyfile(args.sr_assembly, _gfa_path2)
-        subprocess.run(["unicycler", "-s", "src/mock.fq", "-o", unicycler_sr_path]) 
+        subprocess.run(["unicycler_hyplas_modified", "-s", "src/mock.fq", "-o", unicycler_sr_path]) 
         with open (_gfa_path,'r') as hand, open(_fasta_path, 'w') as whand:
                 for line in hand:
                     if line[0] == "S":
