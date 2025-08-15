@@ -1,4 +1,4 @@
-from hyplass import main
+from hyplas import main
 
 
 
