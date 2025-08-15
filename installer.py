@@ -268,7 +268,7 @@ if __name__ == "__main__":
     global ENV_DIR
     global DRY_RUN
     global SCRIPT_DIR
-    global TO_BE_SKIPPED
+ 
     DRY_RUN = args.dry_run
     ENV_DIR = str(Path(args.env).resolve())
     SCRIPT_DIR = os.getcwd()
