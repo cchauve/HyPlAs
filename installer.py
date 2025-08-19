@@ -180,6 +180,9 @@ def install_HyPlAs_procedure(*x):
         )
     run_or_exit(cmd)
     
+    cmd = CMD("pip", "install", ".")
+    run_or_exit(cmd)
+    
     change_dir(current_dir)
 
 def install_minimap2_procedure(*x):
