@@ -4,22 +4,23 @@ HyplAs is a tool aimed at assembling plasmids from hybid short-read and long-rea
 HyPlAs main novlty is to incorporate a plasmid classification tools (Such as platon) on short-read assembled contigs to aid plasmidic long-read selection and performs hybrid plasmids assembly.
 HyPlAs has been desiged to work with single genome sequencing data, and has not been tested on metagenomics data.  
 
-## Installation #TODO add setup.py
+## Installation 
 
-### Bioconda #TODO
+### Quickstart with bioconda
+```
+conda install bioconda::hyplas
+hyplas --help
+```
+
 ### Build hyplass binaries
-```
-conda create -f environment.yml
-conda activate hyplass-env
-make
-```
 
-Or with virtualenv 
+With virtualenv 
 ```
 source scripts/module_load.sh #For cedar. should be installed if not available
 python -m venv hyplass_env
 source hyplass_env/bin/activate
 python3 installer.py hyplass_env
+hyplas --help
 ```
 
 ## Overview
