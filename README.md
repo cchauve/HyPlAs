@@ -54,12 +54,12 @@ rm db.tar.gz
 - -s space separated short read files
 - -l long reads file (required to be gzipped)
 - -o output folder
-- -p number of long read recovery rounds to be executed (Recommend 2 rounds)
+- -p number of long-read recovery rounds to be executed (Recommend 2 rounds)
 
 ### Output
 HyPlAs creates in the output folder the following files and directories:  
-- plasmids.final.fasta:   
-	- assembled plasmids, in FASTA format;  
+- assembly.final.it{iteration}.fasta:   
+	- assembled plasmids, in FASTA format; iteration numbers 0 to {-p} results of each long-read recovery rounds settings.
 - unicycler_sr (directory):  
 	- short-read-only assembly by Unicycler;  
 - classify (directory):  
