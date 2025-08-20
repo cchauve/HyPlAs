@@ -35,7 +35,7 @@ installers = {
 }
 
 def wget_link(link, *args):
-    tgt = f"{link[link.rfind("/")+1:]}"
+    tgt = f"{link[link.rfind('/')+1:]}"
     print(tgt)
     if not os.path.isfile(tgt):
         cmd = CMD(
@@ -46,7 +46,7 @@ def wget_link(link, *args):
         run_or_exit(cmd)
     return 0
 def git_clone(repo, *args):
-    tgt = f"{repo[repo.rfind("/")+1:repo.rfind(".git")]}"
+    tgt = f"{repo[repo.rfind('/')+1:repo.rfind('.git')]}"
     print(tgt)
     if not os.path.isdir(tgt):
         cmd = CMD(
