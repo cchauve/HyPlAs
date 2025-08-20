@@ -149,7 +149,7 @@ def install_blastn_procedure(*x):
     cmd = CMD("tar", "-xzf", archive_file)
     run_or_exit(cmd)
     cmd = CMD("cp", "-rf")
-    for file in glob(f"{archive_file[:archive_file.rfind("tar.gz")]}/*"):
+    for file in glob(f"{archive_file[:archive_file.rfind('tar.gz')]}/*"):
         cmd.append(file)
     cmd.append(f"{ENV_DIR}")
     run_or_exit(cmd)
