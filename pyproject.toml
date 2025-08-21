@@ -21,4 +21,4 @@ license-files = ["LICEN[CS]E*"]
 Homepage = "https://github.com/f0t1h/HyPlAs"
 Issues = "https://github.com/f0t1h/HyPlAs/issues"
 [project.scripts]
-hyplas = "hyplas_main:main"
+hyplas = "hyplas.hyplas:main"
