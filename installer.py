@@ -186,7 +186,7 @@ def install_HyPlAs_procedure(*x):
     current_dir = os.getcwd()
     change_dir(SCRIPT_DIR)
     
-    cmd = CMD("pip", "install", ".", "vvv", "--no-deps",  "--no-cache-dir")
+    cmd = CMD("pip", "install", ".", "-vvv", "--no-deps",  "--no-cache-dir")
     run_or_exit(cmd)
     
     change_dir(current_dir)
