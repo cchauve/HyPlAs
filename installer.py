@@ -17,6 +17,7 @@ def CMD(*args):
     return cmd
 
 def run_or_exit(cmd, **kwargs):
+    print(f"Running {' '.join(cmd)}", file=sys.stderr)
     comp_proc = subprocess.run(cmd)
     comp_proc.check_returncode()
     return comp_proc.returncode
@@ -165,8 +166,7 @@ def install_spades_procedure(*x):
     cmd.append(f"{ENV_DIR}")
     run_or_exit(cmd)
 
-def install_HyPlAs_procedure(*x):
-    
+def install_HyPlAs_cpp_binaries_procedure(*x):
     current_dir = os.getcwd()
     change_dir(SCRIPT_DIR)
     cmd = CMD("make")
@@ -179,8 +179,14 @@ def install_HyPlAs_procedure(*x):
        f"{ENV_DIR}/bin"
         )
     run_or_exit(cmd)
+        
+    change_dir(current_dir)
+def install_HyPlAs_procedure(*x):
     
-    cmd = CMD("pip", "install", ".")
+    current_dir = os.getcwd()
+    change_dir(SCRIPT_DIR)
+    
+    cmd = CMD("pip", "install", ".", "vvv", "--no-deps",  "--no-cache-dir")
     run_or_exit(cmd)
     
     change_dir(current_dir)
@@ -282,7 +288,8 @@ if __name__ == "__main__":
 
 
     t = toolset(
-        ["HyPlAs", install_HyPlAs_procedure, ["unicycler", "platon", "packaging", "numpy", "pandas", "minigraph", "minimap2"]],
+        ["HyPlAs", install_HyPlAs_procedure, ["HyPlAs_bin", "unicycler", "platon", "packaging", "numpy", "pandas", "minigraph", "minimap2"]],
+        ["HyPlAs_bin", install_HyPlAs_cpp_binaries_procedure, []],
         ["pandas", "pip", ["numpy"]],
         ["numpy", "pip", []],
         ["packaging", "pip", []],
