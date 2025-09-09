@@ -191,6 +191,22 @@ def install_HyPlAs_procedure(*x):
     
     change_dir(current_dir)
 
+
+def install_unicycler_procedure(*x):
+
+    # run_or_exit(cmd)
+
+    cwd = os.getcwd()
+    change_dir(SCRIPT_DIR + '/external/unicycler-modified-for-hyplas')
+    
+    
+
+    cmd = CMD("pip", "install", ".")
+    run_or_exit(cmd)
+
+    change_dir(cwd)
+
+
 def install_minimap2_procedure(*x):
     import platform
     git_clone("https://github.com/lh3/minimap2.git")
@@ -297,7 +313,7 @@ if __name__ == "__main__":
         ["prodigal", install_prodigal_procedure, []],
         ["spades", install_spades_procedure, []], 
         ["racon", install_racon_procedure, []],
-        ["unicycler", ["pip", "git+https://github.com/f0t1h/Unicycler.git"], ["spades", "racon"]],
+        ["unicycler", install_unicycler_procedure, ["spades", "racon"]],
         ["minigraph", install_minigraph_procedure, []],
         ["minimap2",install_minimap2_procedure, []],
         ["blast+",install_blastn_procedure, []],
