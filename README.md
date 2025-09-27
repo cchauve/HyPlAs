@@ -4,22 +4,23 @@ HyplAs is a tool aimed at assembling plasmids from hybid short-read and long-rea
 HyPlAs main novlty is to incorporate a plasmid classification tools (Such as platon) on short-read assembled contigs to aid plasmidic long-read selection and performs hybrid plasmids assembly.
 HyPlAs has been desiged to work with single genome sequencing data, and has not been tested on metagenomics data.  
 
-## Installation #TODO add setup.py
+## Installation 
 
-### Bioconda #TODO
+### Quickstart with bioconda
+```
+conda install bioconda::hyplas
+hyplas --help
+```
+
 ### Build hyplass binaries
-```
-conda create -f environment.yml
-conda activate hyplass-env
-make
-```
 
-Or with virtualenv 
+With virtualenv 
 ```
-source module_load.sh #For cedar. should be installed if not available
+source scripts/module_load.sh #For cedar. should be installed if not available
 python -m venv hyplass_env
 source hyplass_env/bin/activate
-python3 build.py hyplass_env
+python3 installer.py hyplass_env
+hyplas --help
 ```
 
 ## Overview
@@ -37,10 +38,10 @@ the following steps (see figure below):
    	3.d. the set of putative plasmidic long reads is augmented by iteratively detecting overlapping long reads;  
 5. The full short-read assembly graph generated in step 2 is refined with the plasmidic long reads selected during step 3, using Unicycler.
 
-![HyPlAs](HyPlAs_pipeline.png?raw=true)
+![HyPlAs](resources/HyPlAs_pipeline.png?raw=true)
 
 ## Usage
-```
+```bu
 python src/hyplas.py --platon-db db -s sr_*.fastq -l lr.fastq.gz -o hyplass-out/ -t threads -p prop_rounds      
 ```
 ### Input
@@ -54,12 +55,12 @@ rm db.tar.gz
 - -s space separated short read files
 - -l long reads file (required to be gzipped)
 - -o output folder
-- -p number of long read recovery rounds to be executed (Recommend 2 rounds)
+- -p number of long-read recovery rounds to be executed (Recommend 2 rounds)
 
 ### Output
 HyPlAs creates in the output folder the following files and directories:  
-- plasmids.final.fasta:   
-	- assembled plasmids, in FASTA format;  
+- assembly.final.it{iteration}.fasta:   
+	- assembled plasmids, in FASTA format; iteration numbers 0 to {-p} results of each long-read recovery rounds settings.
 - unicycler_sr (directory):  
 	- short-read-only assembly by Unicycler;  
 - classify (directory):  
