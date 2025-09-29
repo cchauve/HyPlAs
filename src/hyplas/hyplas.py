@@ -456,7 +456,7 @@ def extract_missing_long_reads(args, plasmid_alignment, graph_alignment_path, pr
     ret = subprocess.run(cat_reads_cmd, stdout = tfw, stderr=sys.stderr)
     tfw.close()
     smr_cmd = [
-            "select_missing_reads_nofilter",
+            "select_missing_reads",
             plasmid_alignment,
             graph_alignment_path,
             tfw.name,
