@@ -57,9 +57,34 @@ rm db.tar.gz
 - -o output folder
 - -p number of long-read recovery rounds to be executed (Recommend 2 rounds)
 
+## Example run.
+
+### Download long and short reads from SRA (SAMN05238672)
+```
+fasterq-dump SRR3666207 SRR10173103
+```
+
+### Run QC tools
+```
+fastp --in1 SRR3666207_1.fastq --in2 SRR3666207_2.fastq --out1 SRR3666207_1.qc.fastq --out2 SRR3666207_2.qc.fastq --unpaired1 SRR3666207_unpaired.qc.fastq
+chopper  -q 9 -l 500 --headcrop 75 --tailcrop 75 --input SRR10173103.fastq --threads 16 | gzip > SRR10173103.qc.fastq.gz 
+```
+
+### Download platon database
+```
+wget https://zenodo.org/record/4066768/files/db.tar.gz
+tar -xzf db.tar.gz
+rm db.tar.gz
+```
+
+### Run HyPlAs
+```
+hyplas -l SRR10173103.qc.fastq.gz -s SRR3666207_1.qc.fastq SRR3666207_2.qc.fastq -p2 -o hyplas_outdir --platon-db db -t 64
+```
+
 ### Output
 HyPlAs creates in the output folder the following files and directories:  
-- assembly.final.it{iteration}.fasta:   
+- plasmids.final.it{iteration}.fasta:   
 	- assembled plasmids, in FASTA format; iteration numbers 0 to {-p} results of each long-read recovery rounds settings.
 - unicycler_sr (directory):  
 	- short-read-only assembly by Unicycler;  
@@ -73,5 +98,5 @@ HyPlAs creates in the output folder the following files and directories:
 - prop_lr/ (directory):
 	- prop_lr/lr.round.[0-9]+.paf: Mappings of the known plasmid long-reads to unknown long-reads, the integer suffix indicates the iteration round of plasmidic long-reads augmentation (step 3.d),  
 	- prop_lr/lr.round.[0-9]+.fastq.gz: Plasmidic long-read sequences recovered in augmentation round X (X in [0-9]);  
-- unicycler_lr (directory):  
-	- Output of the final Unicycler hybrid assembly using the short-read--only assembly and the predicted plasmdic long reads.  
+- unicycler_lr_{iteration} (directories):  
+	- Outputs of the final Unicycler hybrid assembly using the short-read--only assembly and the predicted plasmdic long reads for each iteration.  
